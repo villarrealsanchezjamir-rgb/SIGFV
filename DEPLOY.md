@@ -32,16 +32,18 @@ APK (Android) ───┘
 
 ---
 
-## 2. Antes de desplegar: revise el repositorio
+## 2. Suba el proyecto a GitHub
+
+El proyecto ya tiene un repositorio Git local inicializado en la rama `main`, con un commit inicial. Solo falta crear el repositorio vacío en GitHub y subirlo:
 
 ```powershell
 cd C:\Users\anghe\Downloads\SIGFV
-git init
-git add .
 git status
+git remote add origin https://github.com/USUARIO/SIGFV.git
+git push -u origin main
 ```
 
-Confirme que **no** aparecen:
+Antes de subir, confirme que **no** aparecen en Git:
 
 - `.env`
 - `android/keystore.properties`
@@ -50,19 +52,7 @@ Confirme que **no** aparecen:
 - `dist`
 - `mobile/www`
 
-Luego:
-
-```powershell
-git commit -m "SIGFV listo para despliegue"
-```
-
-Cree un repositorio vacío en GitHub y suba el proyecto:
-
-```powershell
-git remote add origin https://github.com/USUARIO/SIGFV.git
-git branch -M main
-git push -u origin main
-```
+> Si copia el proyecto a otra PC sin la carpeta `.git`, ejecute `git init`, `git add .` y `git commit -m "SIGFV listo para despliegue"` antes de agregar el remoto.
 
 > Guarde el keystore y su contraseña en un lugar seguro. Sin ellos no podrá firmar actualizaciones de la APK.
 
@@ -264,6 +254,8 @@ copy android\app\build\outputs\apk\release\app-release.apk dist\SIGFV-2.0.1.apk
 ```
 
 > La versión ya está incrementada a `versionCode 2` / `versionName 2.0.1` para que Android permita actualizar sobre la APK anterior. Para futuras versiones, incremente `versionCode` en `android/app/build.gradle`.
+
+> `npm run mobile:apk:public` busca automáticamente un JDK 21 instalado. Si ejecuta `npm run mobile:release` directamente, defina `JAVA_HOME` al JDK 21; Gradle 8.11 no debe usar el JBR 25 de Android Studio.
 
 ### 7.3 Si actualiza la APK sobre la anterior
 

@@ -3,14 +3,9 @@
 Sistema web + aplicación Android para la gestión de flota vehicular, ahora con **Supabase (PostgreSQL)** como base de datos única.
 
 ```
-┌──────────────────┐        ┌─────────────────────┐        ┌──────────────────────┐
-│  Web (PC)        │───────▶│  API REST Express   │───────▶│  Supabase PostgreSQL │
-│  public/         │  HTTPS │  server.js (JWT)    │  SSL   │  Proyecto SIGFV      │
-└──────────────────┘        └─────────────────────┘        └──────────────────────┘
-┌──────────────────┐                 ▲
-│  APK Android     │─────────────────┘
-│  Capacitor       │   misma API, misma base de datos
-└──────────────────┘
+Web (navegador) ───────┐
+                       ├──► API Express en la nube (HTTPS) ───► Supabase PostgreSQL
+APK Android ───────────┘
 ```
 
 La web y la APK usan **la misma API y la misma base de datos en Supabase**. La app Android puede ejecutarse en cualquier red (Wi-Fi o datos) siempre que el backend esté accesible.
@@ -91,6 +86,7 @@ JWT_SECRET=UNA_CADENA_LARGA_Y_ALEATORIA_DE_32_O_MAS_CARACTERES
 ```json
 {
   "ok": true,
+  "version": "2.0.1",
   "database": "Supabase PostgreSQL",
   "supabase": { "configured": true, "ok": true }
 }
@@ -188,6 +184,8 @@ npm run mobile:release
 ```
 
 > La versión actual es `versionCode 2` / `versionName 2.0.1`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
+
+> `npm run mobile:apk:public` busca automáticamente un JDK 21 instalado. Si usa `npm run mobile:release` directamente, defina `JAVA_HOME` al JDK 21 (Gradle 8.11 no usa Java 25).
 
 `mobile/www` se genera automáticamente desde `public/` con `scripts/build-mobile.js` (no lo edite a mano). `PUBLIC_API_URL` se toma del entorno, no de `.env`, para evitar grabar una IP local por accidente.
 
