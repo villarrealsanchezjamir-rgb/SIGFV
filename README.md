@@ -24,7 +24,7 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 - Login, permisos por módulo/acción, auditoría y CRUD genérico funcionando.
 - Frontend adaptado a móvil (menú lateral, tablas, formularios) y con PWA.
 - App Android con **Capacitor** compilada y firmada.
-- APK release listo para instalar: **`dist/SIGFV-2.0.0.apk`**.
+- APK release listo para instalar: **`dist/SIGFV-2.0.1-sin-url.apk`** (pide la URL del servidor al iniciar sesión) y la anterior `dist/SIGFV-2.0.0.apk`.
 - Despliegue en la nube preparado (Render, Railway, Fly.io y VPS con Docker + Caddy). Ver **`DEPLOY.md`**.
 
 ---
@@ -108,7 +108,7 @@ Dashboard con datos reales · Vehículos · Conductores y licencias · Asignacio
 
 ### 6.1 Instalar
 
-1. Copie la APK (`dist/SIGFV-2.0.0.apk` o la nueva `dist/SIGFV-2.0.1.apk` generada con la URL pública) al teléfono (cable, WhatsApp, Drive, etc.).
+1. Copie la APK (`dist/SIGFV-2.0.1-sin-url.apk` para ingresar la URL manualmente, o `dist/SIGFV-2.0.1.apk` generada con la URL pública) al teléfono (cable, WhatsApp, Drive, etc.).
 2. Permita **Instalar aplicaciones de origen desconocido** para el explorador/gestor de archivos.
 3. Abra el APK e instale.
 
@@ -167,7 +167,7 @@ Para la APK release firmada con la URL pública grabada (recomendado):
 npm run mobile:apk:public -- https://sigfv.midominio.com
 ```
 
-Salida: `android/app/build/outputs/apk/release/app-release.apk`.
+Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.0.1.apk`.
 
 Para una APK de depuración (pide la URL al iniciar sesión):
 

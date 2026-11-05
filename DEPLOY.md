@@ -214,11 +214,13 @@ docker compose --env-file .env.production up -d --build
 
 ## 7. Configurar la APK
 
-La APK actual (`dist/SIGFV-2.0.0.apk`) trae grabada `http://192.168.1.242:3000`, una IP de la PC original. En otra red no funcionará.
+La APK anterior (`dist/SIGFV-2.0.0.apk`) trae grabada `http://192.168.1.242:3000`, una IP de la PC original. En otra red no funcionará. La nueva `dist/SIGFV-2.0.1-sin-url.apk` ya no trae IP: pide la URL al iniciar sesión.
 
 ### 7.1 Cambio rápido, sin recompilar
 
-1. Instale la APK.
+Ya existe una APK release firmada y validada, `dist/SIGFV-2.0.1-sin-url.apk`, que no trae URL grabada y la pide al iniciar sesión. Sirve para probar el backend apenas esté desplegado:
+
+1. Instale `dist/SIGFV-2.0.1-sin-url.apk` (o la APK vieja).
 2. En la pantalla de inicio de sesión, escriba la URL pública en **Servidor SIGFV**:
    `https://NOMBRE.onrender.com` (o su dominio).
 3. También puede cambiarla después con el botón de servidor en la cabecera.
@@ -241,17 +243,13 @@ cd C:\Users\anghe\Downloads\SIGFV
 npm run mobile:apk:public -- https://NOMBRE.onrender.com
 ```
 
-Salida:
+El comando compila la release, la firma y **copia automáticamente** el resultado a `dist\SIGFV-2.0.1.apk`. Al final muestra la ruta:
 
 ```
-android\app\build\outputs\apk\release\app-release.apk
+APK lista para instalar: ...\dist\SIGFV-2.0.1.apk
 ```
 
-Cópiela a `dist`:
-
-```powershell
-copy android\app\build\outputs\apk\release\app-release.apk dist\SIGFV-2.0.1.apk
-```
+También queda el archivo intermedio en `android\app\build\outputs\apk\release\app-release.apk`.
 
 > La versión ya está incrementada a `versionCode 2` / `versionName 2.0.1` para que Android permita actualizar sobre la APK anterior. Para futuras versiones, incremente `versionCode` en `android/app/build.gradle`.
 
@@ -259,7 +257,7 @@ copy android\app\build\outputs\apk\release\app-release.apk dist\SIGFV-2.0.1.apk
 
 ### 7.3 Si actualiza la APK sobre la anterior
 
-La aplicación descarta automáticamente la URL vieja guardada cuando detecta una nueva URL pública grabada. Si usted había cambiado el servidor manualmente, ese cambio se conserva; puede restablecerlo desde el botón de servidor.
+La aplicación descarta automáticamente la URL vieja guardada cuando detecta una nueva URL pública grabada. Eso incluye cualquier URL que se haya cambiado manualmente en el dispositivo: al actualizar la APK vuelve a quedar la URL pública grabada en la compilación. Si necesita otra, cámbiela de nuevo desde el botón de servidor.
 
 ---
 

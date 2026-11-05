@@ -74,7 +74,19 @@ if (r.status !== 0) {
   process.exit(r.status === null ? 1 : r.status);
 }
 
+const apk = path.join(__dirname, '..', 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+const { version } = require('../package.json');
+const dist = path.join(__dirname, '..', 'dist');
+const finalApk = path.join(dist, `SIGFV-${version}.apk`);
+
+if (!fs.existsSync(apk)) {
+  console.error('No se encontró la APK en:', apk);
+  process.exit(1);
+}
+
+fs.mkdirSync(dist, { recursive: true });
+fs.copyFileSync(apk, finalApk);
+
 console.log('');
-console.log('APK generada en: android/app/build/outputs/apk/release/app-release.apk');
-console.log('Cópiela a dist/ con un nombre de versión, por ejemplo:');
-console.log('  copy android\\app\\build\\outputs\\apk\\release\\app-release.apk dist\\SIGFV-2.0.1.apk');
+console.log('APK generada:', apk);
+console.log('APK lista para instalar:', finalApk);
