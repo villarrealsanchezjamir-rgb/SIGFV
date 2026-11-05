@@ -1,0 +1,6 @@
+# Caddy obtiene el certificado HTTPS automáticamente si el DNS del dominio
+# apunta a este servidor y los puertos 80/443 están abiertos.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy sigfv:3000
+}

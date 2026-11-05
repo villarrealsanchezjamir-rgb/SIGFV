@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+android
+mobile
+dist
+.git
+.gitignore
+*.log
+DEPLOY.md
+README.md
+render.yaml
+railway.json
+fly.toml
+docker-compose.yml
+Caddyfile

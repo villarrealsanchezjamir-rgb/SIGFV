@@ -1,0 +1,36 @@
+# Despliegue en un VPS con Docker + Caddy (HTTPS automático).
+#
+# 1. Copie el proyecto al servidor.
+# 2. Cree .env.production a partir de .env.production.example y complete DOMAIN y credenciales.
+# 3. Apunte el DNS del dominio a la IP del VPS.
+# 4. Abra los puertos 80 y 443 en el firewall del VPS.
+# 5. Ejecute: docker compose --env-file .env.production up -d --build
+# 6. Verifique: https://$DOMAIN/api/health
+
+services:
+  sigfv:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - sigfv
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

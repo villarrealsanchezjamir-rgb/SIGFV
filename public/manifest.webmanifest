@@ -1,0 +1,14 @@
+{
+  "name": "SIGFV · Gestión de flota vehicular",
+  "short_name": "SIGFV",
+  "description": "Sistema integral de gestión de flota vehicular conectado a Supabase",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

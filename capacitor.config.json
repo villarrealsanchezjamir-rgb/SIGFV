@@ -1,0 +1,11 @@
+{
+  "appId": "com.sigfv.app",
+  "appName": "SIGFV",
+  "webDir": "mobile/www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

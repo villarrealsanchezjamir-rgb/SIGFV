@@ -1,0 +1,37 @@
+{
+  "name": "sigfv",
+  "version": "2.0.1",
+  "private": true,
+  "main": "server.js",
+  "description": "SIGFV · Gestión de flota vehicular sobre Supabase",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check db.js && node --check scripts/build-mobile.js && node --check scripts/build-apk-public.js && node --check scripts/healthcheck.js",
+    "crear-admin": "node scripts/crear-admin.js",
+    "db:setup": "node scripts/setup-db.js",
+    "mobile:build": "node scripts/build-mobile.js",
+    "mobile:sync": "node scripts/build-mobile.js && npx cap sync android",
+    "mobile:apk": "node scripts/build-mobile.js && npx cap sync android && cd android && gradlew.bat assembleDebug",
+    "mobile:release": "node scripts/build-mobile.js && npx cap sync android && cd android && gradlew.bat assembleRelease",
+    "mobile:apk:public": "node scripts/build-apk-public.js",
+    "health": "node scripts/healthcheck.js",
+    "docker:build": "docker build -t sigfv .",
+    "docker:run": "docker run --rm -p 3000:3000 --env-file .env sigfv"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/cli": "^7.2.0",
+    "@capacitor/core": "^7.2.0"
+  }
+}

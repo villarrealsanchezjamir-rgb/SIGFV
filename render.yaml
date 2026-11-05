@@ -1,0 +1,32 @@
+# Despliegue en Render (https://render.com)
+#
+# 1. Suba el proyecto a un repositorio de GitHub.
+# 2. En Render: New -> Blueprint -> seleccione el repositorio.
+# 3. Complete las variables marcadas con sync: false.
+# 4. Deploy. La web queda en https://<nombre>.onrender.com
+#
+# Nota: el plan free "duerme" el servicio por inactividad. Para uso real,
+# cambie plan: free por plan: starter (o use Fly.io / un VPS).
+
+services:
+  - type: web
+    name: sigfv
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false

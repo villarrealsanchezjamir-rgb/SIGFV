@@ -1,0 +1,31 @@
+# Despliegue en Fly.io (https://fly.io)
+#
+# 1. Instale flyctl y ejecute: fly auth login
+# 2. Cambie "app" por un nombre único: fly launch --no-deploy
+# 3. Configure los secretos:
+#      fly secrets set JWT_SECRET=... SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_DB_URL=...
+# 4. fly deploy
+# 5. fly open
+
+app = "sigfv"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
