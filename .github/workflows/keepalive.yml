@@ -1,0 +1,33 @@
+name: SIGFV keep-alive
+
+# Mantiene despierto el backend de Render (plan gratuito) con una petición
+# cada 10 minutos. Render suspende el servicio tras ~15 minutos sin tráfico.
+#
+# Nota: GitHub Actions puede retrasar o pausar los cron si el repositorio
+# pasa 60 días sin actividad. Para disponibilidad 24/7 garantizada se
+# recomienda el plan pago de Render (o Fly.io / VPS con proceso permanente).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Despertar y verificar el backend
+        run: |
+          URL="https://sigfv.onrender.com/api/health"
+          for i in 1 2 3 4 5 6 7 8; do
+            code=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 40 "$URL" || true)
+            echo "Intento $i -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "El backend no respondió tras varios intentos."
+          exit 1

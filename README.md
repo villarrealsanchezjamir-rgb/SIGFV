@@ -22,10 +22,11 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 - Seguridad a nivel de base de datos: **RLS activado** y permisos revocados para `anon`/`authenticated`; solo el backend accede.
 - Backend Express reescrito con `pg` y conexión al **pooler de Supabase**.
 - Login, permisos por módulo/acción, auditoría y CRUD genérico funcionando.
-- Frontend adaptado a móvil (menú lateral, tablas, formularios) y con PWA.
-- App Android con **Capacitor** compilada y firmada.
-- APK release listo para instalar: **`dist/SIGFV-2.0.1-sin-url.apk`** (pide la URL del servidor al iniciar sesión) y la anterior `dist/SIGFV-2.0.0.apk`.
+- Frontend de escritorio rediseñado (barra lateral agrupada, dashboard, tablas, formulario lateral).
+- App Android con **Capacitor** compilada y firmada, con interfaz exclusiva para celulares.
+- APK release listo para instalar: **`dist/SIGFV-2.1.0.apk`** (URL del backend grabada, no se pide al usuario).
 - Despliegue en la nube preparado (Render, Railway, Fly.io y VPS con Docker + Caddy). Ver **`DEPLOY.md`**.
+- Keep-alive para Render en `.github/workflows/keepalive.yml`.
 
 ---
 
@@ -108,68 +109,50 @@ Dashboard con datos reales · Vehículos · Conductores y licencias · Asignacio
 
 ### 6.1 Instalar
 
-1. Copie la APK (`dist/SIGFV-2.0.1-sin-url.apk` para ingresar la URL manualmente, o `dist/SIGFV-2.0.1.apk` generada con la URL pública) al teléfono (cable, WhatsApp, Drive, etc.).
+1. Copie la APK **`dist/SIGFV-2.1.0.apk`** al teléfono (cable, WhatsApp, Drive, etc.).
 2. Permita **Instalar aplicaciones de origen desconocido** para el explorador/gestor de archivos.
 3. Abra el APK e instale.
 
 La APK está firmada (release) con el keystore `android/sigfv-release.keystore` y `android/keystore.properties`. Conserve ambos archivos y sus contraseñas en un lugar seguro: son necesarios para publicar actualizaciones de la misma app. No los suba a Git (ya están en `.gitignore`).
 
-### 6.2 Conectar la APK al backend
+### 6.2 Conexión con el backend (URL interna)
 
-En la pantalla de inicio de sesión la APK pide **Servidor SIGFV (URL del backend)**. La APK `dist/SIGFV-2.0.0.apk` fue compilada con `http://192.168.1.242:3000`, la IP de la PC original. Esa IP ya no corresponde a esta PC y no funcionará en otra red: cambie la URL desde la app o recompile con la URL pública.
+La APK **no pide ni muestra la URL del servidor**: `https://sigfv.onrender.com` va grabada en el código al compilar. El usuario solo ingresa su usuario y contraseña.
 
-> **Recomendado:** use la URL pública HTTPS (Opción B). La IP LAN cambia con DHCP y solo funciona en la misma red.
+- Al abrir, la app comprueba `/api/health` y reintenta automáticamente mientras Render despierta.
+- Mientras la app está en uso, envía un ping cada 4 minutos para mantener el servicio activo.
+- Para compilar contra otro servidor (por ejemplo, un entorno de pruebas):
+  ```powershell
+  $env:PUBLIC_API_URL = "https://otro-servidor"; npm run mobile:build
+  ```
 
-**Opción A — Red local (solo para pruebas):**
-
-1. Ejecute `npm start` en la PC.
-2. Averigüe la IP local de la PC: `ipconfig` (ej. `192.168.1.50`).
-3. Permita el puerto 3000 en el Firewall de Windows si es necesario.
-4. En la APK escriba `http://192.168.1.50:3000` y luego usuario/contraseña.
-5. El teléfono debe estar en la misma red Wi-Fi que la PC.
-
-**Opción B — Internet (recomendada para uso real):**
-
-1. Publique el backend en un servicio con HTTPS (Render, Railway, Fly.io, VPS, etc.). Siga **[DEPLOY.md](DEPLOY.md)**.
-   - El proyecto incluye `render.yaml`, `railway.json`, `fly.toml`, `docker-compose.yml` y un `Dockerfile` listo para desplegar.
-   - Configure las mismas variables de `.env` en el panel del servicio.
-2. En la APK escriba la URL pública, por ejemplo `https://sigfv.midominio.com`.
-3. Ambos, web y APK, seguirán usando la misma base de datos Supabase.
-
-**Opción B2 — Túnel temporal (sin cuenta, para probar desde datos móviles):**
-
-1. Con el backend encendido, ejecute en otra terminal:
-   ```bash
-   npx localtunnel --port 3000
-   ```
-   o, si tiene Cloudflare Tunnel:
-   ```bash
-   cloudflared tunnel --url http://localhost:3000
-   ```
-2. Copie la URL HTTPS que aparece y péguela en el campo **Servidor SIGFV** de la APK.
-3. La PC debe permanecer encendida. La URL del túnel puede cambiar al reiniciarlo.
-
-También puede fijar la URL al compilar (recomendado para distribuir la APK):
-
-```powershell
-npm run mobile:apk:public -- https://sigfv.midominio.com
-```
-
-La URL queda como valor por defecto, pero el usuario puede cambiarla desde el botón de servidor en la cabecera.
+> **Disponibilidad 24/7:** el plan gratuito de Render suspende el servicio tras ~15 minutos sin tráfico. El workflow `.github/workflows/keepalive.yml` hace una petición cada 10 minutos para mantenerlo despierto, pero GitHub Actions puede retrasarse o pausarse si el repositorio pasa 60 días sin actividad. Para disponibilidad garantizada use el plan pago de Render (o Fly.io/VPS con proceso permanente).
 
 ### 6.3 Recompilar el APK
 
-Requisitos: JDK 21, Android SDK (platform 35, build-tools 35), `android/local.properties` con la ruta correcta del SDK y el keystore de firma.
+Requisitos: JDK 21, Android SDK (platform 35, build-tools 35), `android/local.properties` con la ruta del SDK y el keystore de firma.
 
-Para la APK release firmada con la URL pública grabada (recomendado):
+Para la APK release firmada (usa la URL de producción por defecto):
+
+```powershell
+npm run mobile:apk:public
+```
+
+Para grabar otra URL pública:
 
 ```powershell
 npm run mobile:apk:public -- https://sigfv.midominio.com
 ```
 
-Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.0.1.apk`.
+Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.1.0.apk`.
 
-Para una APK de depuración (pide la URL al iniciar sesión):
+Para la release sin copiar a `dist`:
+
+```powershell
+npm run mobile:release
+```
+
+Para una APK de depuración:
 
 ```powershell
 npm run mobile:apk
@@ -177,17 +160,11 @@ npm run mobile:apk
 
 Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Para la release sin cambiar la URL:
-
-```powershell
-npm run mobile:release
-```
-
-> La versión actual es `versionCode 2` / `versionName 2.0.1`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
+> La versión actual es `versionCode 3` / `versionName 2.1.0`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
 
 > `npm run mobile:apk:public` busca automáticamente un JDK 21 instalado. Si usa `npm run mobile:release` directamente, defina `JAVA_HOME` al JDK 21 (Gradle 8.11 no usa Java 25).
 
-`mobile/www` se genera automáticamente desde `public/` con `scripts/build-mobile.js` (no lo edite a mano). `PUBLIC_API_URL` se toma del entorno, no de `.env`, para evitar grabar una IP local por accidente.
+`mobile/www` se genera automáticamente desde `mobile/app/` (diseño exclusivo para celulares) con `scripts/build-mobile.js`; no lo edite a mano. La web de escritorio vive en `public/` y tiene su propio diseño. `PUBLIC_API_URL` se toma del entorno, no de `.env`, para evitar grabar una IP local por accidente.
 
 ---
 
@@ -200,11 +177,20 @@ SIGFV/
 ├─ .env                      Credenciales locales (NO compartir)
 ├─ .env.example              Plantilla de variables
 ├─ .env.production.example   Plantilla para VPS
-├─ public/                   Interfaz web/PWA
+├─ public/                  Web de escritorio (diseño propio)
 │  ├─ index.html
+│  ├─ app.css
+│  ├─ app.js
 │  ├─ manifest.webmanifest
 │  ├─ sw.js
 │  └─ icon.svg
+├─ mobile/
+│  ├─ app/                    Interfaz exclusiva de la APK (fuente)
+│  │  ├─ index.html
+│  │  ├─ app.css
+│  │  ├─ app.js
+│  │  └─ config.js
+│  └─ www/                   Copia empaquetada (generada)
 ├─ database/
 │  ├─ 01_SIGFV_Supabase.sql  Esquema PostgreSQL (Supabase)
 │  └─ legacy/                Esquema MySQL original (no usado)
@@ -215,7 +201,7 @@ SIGFV/
 │  ├─ build-apk-public.js
 │  └─ healthcheck.js
 ├─ android/                  Proyecto Android (Capacitor)
-├─ mobile/www/               Web empaquetada para la APK (generada)
+├─ .github/workflows/        Keep-alive de Render
 ├─ dist/                     APKs generadas
 ├─ capacitor.config.json
 ├─ Dockerfile

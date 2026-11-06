@@ -1,5 +1,5 @@
 /* SIGFV · service worker (solo para la versión web/PWA) */
-const CACHE = 'sigfv-v3';
+const CACHE = 'sigfv-v4';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE)
     .then(c => c.addAll(['./', './index.html', './icon.svg', './manifest.webmanifest']))

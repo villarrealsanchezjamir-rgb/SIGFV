@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#171717">
+  <meta name="color-scheme" content="light">
+  <meta name="format-detection" content="telephone=no">
+  <title>SIGFV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- ============ Arranque ============ -->
+  <div id="boot">
+    <div class="boot-logo">SF</div>
+    <h1>SIGFV</h1>
+    <p id="bootMsg">Iniciando la aplicación…</p>
+    <div class="spinner" id="bootSpin"></div>
+    <div class="boot-actions hidden" id="bootActions">
+      <button class="btn gold" id="bootRetry">Reintentar conexión</button>
+    </div>
+  </div>
+
+  <!-- ============ Acceso ============ -->
+  <div id="login" class="hidden">
+    <div class="login-top">
+      <div class="boot-logo">SF</div>
+      <h1>SIGFV</h1>
+      <p>Gestión de flota vehicular desde su dispositivo.</p>
+    </div>
+    <form class="login-card" id="loginForm" autocomplete="on">
+      <h2>Iniciar sesión</h2>
+      <p class="lead">Acceda con su cuenta corporativa.</p>
+      <div class="field">
+        <label for="usuario">Usuario</label>
+        <input class="input" id="usuario" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="usuario.apellido" required>
+      </div>
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <div class="pw">
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+          <button type="button" id="togglePw" aria-label="Mostrar contraseña"></button>
+        </div>
+      </div>
+      <div class="error" id="loginError" role="alert"></div>
+      <button class="btn primary full" id="loginBtn" type="submit">Ingresar</button>
+      <p class="login-note">Conexión segura · SIGFV</p>
+    </form>
+  </div>
+
+  <!-- ============ Aplicación ============ -->
+  <div id="app" class="hidden">
+    <header class="appbar"><div class="appbar-in" id="appbar"></div></header>
+    <main class="page" id="view"></main>
+    <nav class="tabbar" aria-label="Navegación principal"><div class="tabbar-in" id="tabs"></div></nav>
+  </div>
+
+  <!-- ============ Subpantalla (listado / formulario) ============ -->
+  <section id="sub" aria-label="Detalle">
+    <header class="subbar"><div class="subbar-in" id="subBar"></div></header>
+    <div class="subbody"><div class="subbody-in" id="subBody"></div></div>
+    <div class="subfoot" id="subFoot"></div>
+  </section>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('togglePw').innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  </script>
+</body>
+</html>

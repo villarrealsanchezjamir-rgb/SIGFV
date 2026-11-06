@@ -1,132 +1,124 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SIGFV · Gestión de flota vehicular</title>
-<meta name="theme-color" content="#171717">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-<style>
-:root{--carbon:#171717;--gold:#D4AF37;--gold-d:#A98624;--steel:#42464B;--bg:#E9EAEC;--ok:#26865B;--bad:#C64747;--info:#447BA8;--line:#d4d6d9}
-*{box-sizing:border-box;margin:0}body{font:14px/1.45 'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--carbon)}
-.hide{display:none!important}
-#login{min-height:100vh;display:grid;place-items:center;background:var(--carbon)}
-#login form{background:#fff;width:340px;padding:28px;border-top:3px solid var(--gold)}#login h1{font-size:22px}#login p{color:var(--steel);margin:2px 0 18px}
-label{display:block;font-size:12px;color:var(--steel);margin:10px 0 3px}input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);font:inherit;background:#fff}
-.btn{background:var(--carbon);color:#fff;border:0;padding:8px 16px;font:inherit;cursor:pointer;border-bottom:2px solid var(--gold)}.btn.sec{background:#fff;color:var(--carbon);border:1px solid var(--line)}.btn.full{width:100%;margin-top:16px}
-.err{color:var(--bad);margin-top:10px;min-height:18px}
-aside{width:240px;background:var(--carbon);color:#cfd0d2;position:fixed;inset:0 auto 0 0;overflow-y:auto;border-right:2px solid var(--gold-d)}
-.brand{padding:18px 20px;border-bottom:1px solid #2a2a2a;color:#fff;font-weight:600;font-size:17px}.brand small{display:block;color:var(--gold);font-weight:400;font-size:11px}
-nav h6{font-size:11px;font-weight:500;color:#8a8d91;padding:14px 20px 4px}
-nav a{display:flex;gap:10px;align-items:center;padding:8px 20px;color:inherit;cursor:pointer;border-left:3px solid transparent}nav a:hover,nav a.on{background:#222;color:#fff}nav a.on{border-left-color:var(--gold)}nav svg{width:16px;height:16px}
-main{margin-left:240px}header{background:#fff;border-bottom:1px solid var(--line);padding:10px 28px;display:flex;align-items:center;gap:18px;position:sticky;top:0;z-index:5}.sp{flex:1}
-.av{width:30px;height:30px;background:var(--carbon);color:var(--gold);display:grid;place-items:center;font-weight:600;border-radius:50%}
-.ib{background:none;border:0;cursor:pointer;color:var(--steel);position:relative}.ib b{position:absolute;top:-5px;right:-7px;background:var(--bad);color:#fff;font-size:10px;border-radius:8px;padding:0 5px}
-section{padding:24px 28px}h1{font-size:21px;font-weight:600}.sub{color:var(--steel);margin:2px 0 16px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:16px}
-.kpi{background:#fff;border:1px solid var(--line);border-top:3px solid var(--steel);padding:12px 14px}.kpi span{color:var(--steel);font-size:12px}.kpi strong{display:block;font-size:26px;font-weight:600}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:1000px){.grid{grid-template-columns:1fr}}
-.panel{background:#fff;border:1px solid var(--line);margin-bottom:12px;overflow-x:auto}.panel h3{font-size:14px;padding:12px 16px;border-bottom:1px solid var(--line)}
-.bars div{display:flex;align-items:center;gap:10px;padding:6px 16px}.bars i{display:block;height:14px;min-width:2px}.bars span:first-child{width:130px}
-.tools{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}.tools input{max-width:300px}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 14px;border-bottom:1px solid #ececec;white-space:nowrap}th{font-weight:500;color:var(--steel);background:#f7f7f8}
-.tag{padding:2px 8px;font-size:12px;color:#fff;background:var(--steel)}.state{padding:22px;text-align:center;color:var(--steel)}.state.e{color:var(--bad)}
-.pg{display:flex;gap:10px;align-items:center;padding:10px 14px;color:var(--steel)}.act button{background:none;border:0;cursor:pointer;color:var(--info);font:inherit;margin-right:8px}.act .d{color:var(--bad)}
-dialog{border:0;padding:0;width:min(760px,94vw);margin:auto}dialog::backdrop{background:#0008}dialog form{padding:22px}dialog h2{font-size:18px;margin-bottom:6px}
-.fg{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.fg .w{grid-column:1/-1}.ft{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-#toast{position:fixed;right:20px;bottom:20px;z-index:50;background:var(--carbon);color:#fff;padding:10px 16px;border-left:4px solid var(--ok);display:none}#toast.e{border-color:var(--bad)}
-#menu{display:none;background:none;border:0;cursor:pointer;color:var(--carbon);padding:4px}
-#ov{display:none;position:fixed;inset:0;background:#0007;z-index:25}
-@media(max-width:700px){
- aside{display:block;transform:translateX(-100%);transition:transform .22s ease;z-index:30;box-shadow:6px 0 18px #0004}
- aside.open{transform:none}#menu{display:inline-flex}#ov.on{display:block}
- main{margin:0}.fg{grid-template-columns:1fr}section{padding:18px 14px}header{padding:10px 14px;gap:10px}
- #fecha,#ur{display:none}.kpis{grid-template-columns:1fr 1fr}.tools input{max-width:none;flex:1}
- table{font-size:12px}th,td{padding:8px 10px}
-}
-:focus-visible{outline:2px solid var(--info);outline-offset:1px}
-</style></head><body>
-<div id="login"><form id="lf"><h1>SIGFV</h1><p>Sistema integral de gestión de flota vehicular</p>
-<label for="lu">Usuario</label><input id="lu" autocomplete="username" required><label for="lp">Contraseña</label><input id="lp" type="password" autocomplete="current-password" required>
-<div id="srvwrap" class="hide"><label for="srv">Servidor SIGFV (URL del backend)</label><input id="srv" autocomplete="url" inputmode="url" placeholder="https://mi-servidor.com"></div>
-<button class="btn full">Iniciar sesión</button><div class="err" id="le"></div></form></div>
-<div id="ov"></div>
-<div id="app" class="hide"><aside id="side"><div class="brand">SIGFV<small>Gestión de flota vehicular</small></div><nav id="nav"></nav></aside>
-<main><header><button class="ib" id="menu" title="Menú"><i data-lucide="menu"></i></button><span id="fecha" style="color:var(--steel)"></span><span class="sp"></span>
-<button class="ib hide" id="srvbtn" title="Cambiar servidor"><i data-lucide="server"></i></button>
-<button class="ib hide" id="bell" title="Alertas"><i data-lucide="bell"></i><b id="nb">0</b></button>
-<div class="av" id="av"></div><div><div id="un"></div><small id="ur" style="color:var(--steel)"></small></div>
-<button class="ib" title="Cerrar sesión" id="out"><i data-lucide="log-out"></i></button></header><section id="view"></section></main></div>
-<dialog id="dlg"><form id="df" method="dialog"></form></dialog><div id="toast" role="status"></div>
-<script>
-const $=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let M=null,CUR=null,PG=1,Q='';const catCache={};
-const MOBILE=!!(window.SIGFV_MOBILE||window.Capacitor);
-const BAKED_API=String(window.SIGFV_API_BASE||'').replace(/\/+$/,'');
-// Si la APK se recompiló con otra URL pública, descartar la URL vieja guardada.
-if(MOBILE&&BAKED_API&&localStorage.getItem('sigfv_api_default')!==BAKED_API){
- localStorage.setItem('sigfv_api',BAKED_API);localStorage.setItem('sigfv_api_default',BAKED_API)}
-const apiBase=()=>String((MOBILE?localStorage.getItem('sigfv_api'):'')||BAKED_API||'').replace(/\/+$/,'');
-async function api(p,o={}){const t=sessionStorage.getItem('tk');const r=await fetch(apiBase()+'/api'+p,{...o,headers:{'Content-Type':'application/json',...(t?{Authorization:'Bearer '+t}:{})}});
- let d={};try{d=await r.json()}catch{} if(r.status===401&&p!=='/auth/login'){sessionStorage.removeItem('tk');location.reload()} if(!r.ok)throw new Error(d.error||'Error '+r.status);return d}
-function toast(m,e){const t=$('#toast');t.textContent=m;t.className=e?'e':'';t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',3500)}
-const cat=async n=>catCache[n]||(catCache[n]=await api('/cat/'+n));
-const closeNav=()=>{$('#side').classList.remove('open');$('#ov').classList.remove('on')};
-if(MOBILE){$('#srvwrap').classList.remove('hide');$('#srv').value=apiBase()}
-$('#menu').onclick=()=>{$('#side').classList.add('open');$('#ov').classList.add('on')};
-$('#ov').onclick=closeNav;
-$('#lf').onsubmit=async e=>{e.preventDefault();$('#le').textContent='';
- if(MOBILE){const s=$('#srv').value.trim().replace(/\/+$/,'');
-  if(!/^https?:\/\/.+/i.test(s)){$('#le').textContent='Ingrese la URL del servidor (ej. https://sigfv.midominio.com).';return}
-  localStorage.setItem('sigfv_api',s)}
- try{const r=await api('/auth/login',{method:'POST',body:JSON.stringify({usuario:$('#lu').value,password:$('#lp').value})});sessionStorage.setItem('tk',r.token);start()}catch(x){$('#le').textContent=x.message}};
-$('#out').onclick=()=>{sessionStorage.removeItem('tk');location.reload()};
-async function start(){try{M=await api('/meta')}catch{return}
- $('#login').classList.add('hide');$('#app').classList.remove('hide');$('#un').textContent=M.user;$('#ur').textContent=M.roles.join(', ');$('#av').textContent=M.user[0];
- $('#fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
- let h='',g='';const add=(k,l,i)=>h+=`<a data-k="${k}"><i data-lucide="${i}"></i>${esc(l)}</a>`;
- if(M.dashboard)add('dashboard','Dashboard','layout-dashboard');
- for(const[k,r]of Object.entries(M.resources)){if(r.group!==g){g=r.group;h+=`<h6>${esc(g)}</h6>`}add(k,r.label,r.icon)}
- if(M.notificaciones){h+='<h6>Alertas</h6>';add('notificaciones','Notificaciones','bell');$('#bell').classList.remove('hide');$('#bell').onclick=()=>go('notificaciones')}
- $('#nav').innerHTML=h;$('#nav').onclick=e=>{const a=e.target.closest('a');if(a)go(a.dataset.k)};lucide.createIcons();
- if(MOBILE){$('#srvbtn').classList.remove('hide');$('#srvbtn').onclick=()=>{const v=prompt('URL del servidor SIGFV:',apiBase());if(v!==null&&/^https?:\/\/.+/i.test(v.trim())){localStorage.setItem('sigfv_api',v.trim().replace(/\/+$/,''));location.reload()}}}
- if(M.notificaciones)api('/notificaciones').then(n=>$('#nb').textContent=n.length).catch(()=>{});
- go(M.dashboard?'dashboard':Object.keys(M.resources)[0]||'')}
-const head=(t,d)=>`<h1>${esc(t)}</h1><p class="sub">${esc(d)}</p>`,st=(m,e)=>`<div class="state ${e?'e':''}">${esc(m)}</div>`;
-function go(k){CUR=k;PG=1;Q='';closeNav();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
- ({dashboard:dash,notificaciones:notif}[k]||(()=>list()))()}
-const KP=[['total','Vehículos registrados'],['conductores','Conductores activos'],['insp_nc','Inspecciones no conformes (30 días)'],['docs','Documentos vencidos o por vencer'],['mant','Mantenimientos programados'],['litros','Combustible del mes (L)'],['incidentes','Incidentes abiertos']];
-const tbl=(a,c)=>a.length?`<table>${a.map(x=>`<tr>${c.map(f=>`<td>${esc(x[f])}</td>`).join('')}</tr>`).join('')}</table>`:st('Sin registros.');
-async function dash(){$('#view').innerHTML=head('Dashboard general','Datos calculados desde la base de datos.')+st('Cargando…');
- try{const d=await api('/dashboard'),tot=Math.max(1,...d.estados.map(e=>e.n));
-  $('#view').innerHTML=head('Dashboard general','Datos calculados desde la base de datos.')+`<div class="kpis">${KP.map(([k,l])=>`<div class="kpi"><span>${l}</span><strong>${Number(d.k[k]).toLocaleString('es-PE')}</strong></div>`).join('')}</div>
-  <div class="grid"><div class="panel"><h3>Disponibilidad de la flota</h3><div class="bars">${d.estados.map(e=>`<div><span>${esc(e.nombre)}</span><i style="width:${e.n/tot*60}%;background:${esc(e.color)}"></i><span>${e.n}</span></div>`).join('')}</div></div>
-  <div><div class="panel"><h3>Próximos mantenimientos</h3>${tbl(d.mant,['vehiculo','tipo','fecha'])}</div><div class="panel"><h3>Documentos por vencer</h3>${tbl(d.docs,['titular','documento','vence'])}</div></div></div>`}
- catch(e){$('#view').innerHTML=head('Dashboard general','')+st(e.message,1)}}
-async function notif(){try{const n=await api('/notificaciones');$('#view').innerHTML=head('Notificaciones','Alertas generadas a partir de los registros vigentes.')+`<div class="panel">${n.length?tbl(n,['tipo','detalle','fecha']):st('No hay alertas activas.')}</div>`}catch(e){$('#view').innerHTML=st(e.message,1)}}
-const badge=v=>{const m={conforme:'#26865B',activo:'#26865B',vigente:'#26865B',completado:'#26865B',cerrado:'#26865B',finalizada:'#26865B',no_conforme:'#C64747',vencido:'#C64747',inhabilitado:'#C64747',inactivo:'#C64747',pendiente:'#C64747','por vencer':'#A98624',programado:'#447BA8',programada:'#447BA8',activa:'#447BA8'};return`<span class="tag" style="background:${m[v]||'#42464B'}">${esc(String(v??'').replace(/_/g,' '))}</span>`};
-async function list(){const r=M.resources[CUR];
- $('#view').innerHTML=head(r.label,'Consulte, registre y administre la información.')+`<div class="tools"><input id="q" placeholder="Buscar…" value="${esc(Q)}">${r.crear?'<button class="btn" id="new">Registrar</button>':''}${r.exportar?'<button class="btn sec" id="exp">Exportar CSV</button>':''}</div><div class="panel" id="tb">${st('Cargando…')}</div>`;
- $('#q').oninput=e=>{Q=e.target.value;PG=1;clearTimeout(list._t);list._t=setTimeout(load,300)};if(r.crear)$('#new').onclick=()=>form();if(r.exportar)$('#exp').onclick=exportar;load()}
-async function load(){const r=M.resources[CUR],k=CUR;try{const d=await api(`/r/${k}?pagina=${PG}&q=${encodeURIComponent(Q)}`);if(k!==CUR)return;const pages=Math.max(1,Math.ceil(d.total/15));
- $('#tb').innerHTML=d.items.length?`<table><tr>${r.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th></th></tr>${d.items.map(x=>`<tr>${r.cols.map(c=>`<td>${c[2]==='badge'?badge(x[c[0]]):esc(x[c[0]]??'—')}</td>`).join('')}<td class="act">${r.editar?`<button onclick="form(${x.id})">Editar</button>`:''}${r.eliminar?`<button class="d" onclick="del(${x.id})">Eliminar</button>`:''}</td></tr>`).join('')}</table>
- <div class="pg"><button class="btn sec" ${PG<2?'disabled':''} onclick="PG--;load()">Anterior</button>Página ${PG} de ${pages} · ${d.total} registros<button class="btn sec" ${PG>=pages?'disabled':''} onclick="PG++;load()">Siguiente</button></div>`
- :st(Q?'Ningún registro coincide con la búsqueda.':'Aún no hay registros. Use «Registrar» para crear el primero.')}catch(e){$('#tb').innerHTML=st(e.message,1)}}
-async function form(id){const r=M.resources[CUR];let v={};try{if(id)v=await api(`/r/${CUR}/${id}`);
- const opts={};await Promise.all(r.fields.filter(f=>f.cat).map(async f=>opts[f.n]=await cat(f.cat)));
- const dt=x=>x?String(x).replace(' ','T').slice(0,16):'';
- const inp=f=>{const val=v[f.n]??'',n=`name="${f.n}" id="f_${f.n}" ${f.req?'required':''}`;
-  if(f.t==='select'){const o=f.cat?opts[f.n].map(x=>[x.id,x.nombre]):f.o;return`<select ${n}><option value="">${f.req?'Seleccione…':'—'}</option>${o.map(([a,b])=>`<option value="${esc(a)}" ${String(val)===String(a)?'selected':''}>${esc(b)}</option>`).join('')}</select>`}
-  if(f.t==='textarea')return`<textarea ${n} rows="3">${esc(val)}</textarea>`;
-  return`<input ${n} type="${f.t==='datetime'?'datetime-local':f.t==='number'?'number':f.t} ${f.t==='number'?'step="any"':''}" value="${esc(f.t==='datetime'?dt(val):val)}" ${f.t==='password'?'autocomplete="new-password"':''}>`};
- $('#df').innerHTML=`<h2>${id?'Editar':'Registrar'} · ${esc(r.label)}</h2><div class="fg">${r.fields.map(f=>`<div class="${f.t==='textarea'?'w':''}"><label for="f_${f.n}">${esc(f.l)}${f.req?' *':''}</label>${inp(f)}</div>`).join('')}</div><div class="err" id="fe"></div><div class="ft"><button type="button" class="btn sec" onclick="$('#dlg').close()">Cancelar</button><button class="btn">Guardar</button></div>`;
- $('#df').onsubmit=async e=>{e.preventDefault();const b={};new FormData($('#df')).forEach((x,k)=>b[k]=x);
-  try{await api(id?`/r/${CUR}/${id}`:`/r/${CUR}`,{method:id?'PUT':'POST',body:JSON.stringify(b)});$('#dlg').close();Object.keys(catCache).forEach(k=>delete catCache[k]);toast(id?'Cambios guardados.':'Registro creado.');load()}catch(x){$('#fe').textContent=x.message}};
- $('#dlg').showModal()}catch(e){toast(e.message,1)}}
-async function del(id){if(!confirm('¿Eliminar este registro? Quedará dado de baja y no aparecerá en los listados.'))return;try{await api(`/r/${CUR}/${id}`,{method:'DELETE'});toast('Registro eliminado.');load()}catch(e){toast(e.message,1)}}
-async function exportar(){try{const r=M.resources[CUR],d=await api(`/r/${CUR}?limit=5000&q=${encodeURIComponent(Q)}`),c=r.cols.map(x=>x[0]);
- const csv='\ufeff'+[r.cols.map(x=>x[1]),...d.items.map(x=>c.map(k=>x[k]))].map(l=>l.map(s=>{s=String(s??'');if(/^[=+\-@]/.test(s))s="'"+s;return`"${s.replace(/"/g,'""')}"`}).join(',')).join('\n');
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=CUR+'.csv';a.click()}catch(e){toast(e.message,1)}}
-if(sessionStorage.getItem('tk'))start();
-if(!MOBILE&&'serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-</script></body></html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SIGFV · Gestión de flota vehicular</title>
+  <meta name="description" content="SIGFV · Sistema integral de gestión de flota vehicular conectado a Supabase.">
+  <meta name="theme-color" content="#171717">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- ============ Acceso ============ -->
+  <div id="login">
+    <section class="login-brand">
+      <div>
+        <div class="login-logo"><i>SF</i><span>SIGFV</span></div>
+        <h1>Su flota, <em>controlada</em> de punta a punta.</h1>
+        <p>Vehículos, conductores, mantenimiento, combustible y seguridad en una sola plataforma conectada a Supabase.</p>
+        <ul class="brand-points">
+          <li><span class="dot"></span>Disponibilidad y estado de la flota en tiempo real</li>
+          <li><span class="dot"></span>Alertas de documentos, licencias e inspecciones</li>
+          <li><span class="dot"></span>Trazabilidad de mantenimientos e incidentes</li>
+        </ul>
+      </div>
+      <div class="login-foot">SIGFV · Sistema Integral de Gestión de Flota Vehicular</div>
+    </section>
+
+    <section class="login-box">
+      <form class="login-card" id="loginForm" autocomplete="on">
+        <h2>Iniciar sesión</h2>
+        <p class="lead">Acceda con su cuenta corporativa.</p>
+
+        <div class="field">
+          <label for="usuario">Usuario</label>
+          <input class="input" id="usuario" name="usuario" autocomplete="username" placeholder="usuario.apellido" required autofocus>
+        </div>
+        <div class="field">
+          <label for="password">Contraseña</label>
+          <div class="pw">
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+            <button type="button" id="togglePw" aria-label="Mostrar contraseña"></button>
+          </div>
+        </div>
+
+        <div class="error" id="loginError" role="alert"></div>
+        <button class="btn primary full" id="loginBtn" type="submit">Ingresar</button>
+        <p class="login-hint">SIGFV v2.1 · Conexión segura HTTPS</p>
+      </form>
+    </section>
+  </div>
+
+  <!-- ============ Aplicación ============ -->
+  <div id="app" class="hidden">
+    <aside id="sidebar">
+      <div class="brand">
+        <span class="brand-mark">SF</span>
+        <div><strong>SIGFV</strong><small>Gestión de flota vehicular</small></div>
+      </div>
+      <div class="side-search"><input id="moduleFilter" placeholder="Buscar módulo…" autocomplete="off" aria-label="Buscar módulo"></div>
+      <nav id="nav" aria-label="Módulos"></nav>
+      <div class="side-foot">
+        <div class="user-mini">
+          <div class="avatar sm" id="sideAvatar">?</div>
+          <div><strong id="sideName">Usuario</strong><small id="sideRoles"></small></div>
+        </div>
+        <button class="logout" id="logout"></button>
+      </div>
+    </aside>
+    <div id="scrim"></div>
+
+    <main id="main">
+      <header id="topbar">
+        <button id="menuBtn" aria-label="Abrir menú"></button>
+        <div class="crumb" id="crumb"></div>
+        <div class="top-actions">
+          <button class="icon-btn hidden" id="bell" title="Notificaciones" aria-label="Notificaciones">
+            <span id="bellIcon"></span><span class="count hidden" id="bellCount">0</span>
+          </button>
+          <div class="avatar sm" id="avatar" title="Cuenta"></div>
+        </div>
+      </header>
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <!-- ============ Panel lateral de formulario ============ -->
+  <div id="drawerScrim"></div>
+  <aside class="drawer" id="drawer" aria-label="Formulario">
+    <div class="drawer-head" id="drawerHead"></div>
+    <form id="drawerForm" method="dialog">
+      <div id="drawerBody"></div>
+      <div class="drawer-foot" id="drawerFoot"></div>
+    </form>
+  </aside>
+
+  <!-- ============ Confirmación ============ -->
+  <dialog id="confirmDlg">
+    <div class="dlg-body">
+      <h3 id="confirmTitle">Eliminar registro</h3>
+      <p id="confirmText"></p>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" id="confirmCancel" type="button">Cancelar</button>
+      <button class="btn danger" id="confirmOk" type="button">Sí, eliminar</button>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+  <script>
+    // Iconos estáticos del armazón (el resto los inyecta app.js).
+    document.getElementById('togglePw').innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    document.getElementById('menuBtn').innerHTML = '<svg class="ic lg" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    document.getElementById('bellIcon').innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>';
+    document.getElementById('logout').innerHTML = '<svg class="ic sm" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg> Cerrar sesión';
+  </script>
+</body>
+</html>

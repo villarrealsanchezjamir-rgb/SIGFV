@@ -134,7 +134,7 @@ app.use('/api', (req, res, nx) => {
   nx();
 });
 app.use((req, res, nx) => { res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'" }); nx(); });
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'" }); nx(); });
 
 app.get('/api/health', wrap(async (req, res) => {
   await q('SELECT 1');
@@ -168,7 +168,7 @@ app.post('/api/auth/login', wrap(async (req, res) => {
 
 app.get('/api/meta', auth, wrap(async (req, res) => {
   const out = {}; for (const [k, r] of Object.entries(RES)) if (req.perms.has(r.mod + ':consultar'))
-    out[k] = { label: r.label, group: r.group, icon: r.icon, cols: r.cols, fields: r.fields, crear: req.perms.has(r.mod + ':crear'), editar: req.perms.has(r.mod + ':editar'), eliminar: req.perms.has(r.mod + ':eliminar') && !!r.soft, exportar: req.perms.has(r.mod + ':exportar') };
+    out[k] = { label: r.label, group: r.group, mod: r.mod, icon: r.icon, cols: r.cols, fields: r.fields, crear: req.perms.has(r.mod + ':crear'), editar: req.perms.has(r.mod + ':editar'), eliminar: req.perms.has(r.mod + ':eliminar') && !!r.soft, exportar: req.perms.has(r.mod + ':exportar') };
   const u = (await q("SELECT (nombres || ' ' || apellidos) nombre FROM usuarios WHERE id=$1", [req.user.id]))[0];
   res.json({ user: u.nombre, roles: (await q('SELECT r.nombre FROM usuario_roles ur JOIN roles r ON r.id=ur.rol_id WHERE ur.usuario_id=$1', [req.user.id])).map(r => r.nombre),
     dashboard: req.perms.has('dashboard:consultar'), notificaciones: req.perms.has('notificaciones:consultar'), resources: out }); }));

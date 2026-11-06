@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta original de SIGFV -->
+    <color name="colorPrimary">#171717</color>
+    <color name="colorPrimaryDark">#171717</color>
+    <color name="colorAccent">#D4AF37</color>
+    <color name="sigfv_carbon">#171717</color>
+    <color name="sigfv_gold">#D4AF37</color>
+    <color name="sigfv_steel">#42464B</color>
+    <color name="sigfv_bg">#E9EAEC</color>
+    <color name="sigfv_white">#FFFFFF</color>
+</resources>

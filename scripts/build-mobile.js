@@ -1,37 +1,42 @@
 /*
- * Copia la interfaz web a mobile/www y genera config.js con las
- * variables propias de la app Android.
+ * Copia la interfaz móvil exclusiva (mobile/app) a mobile/www y genera
+ * config.js con la URL del backend grabada en el código de la APK.
  *
- * IMPORTANTE: PUBLIC_API_URL se toma del entorno, NO de .env, para evitar
- * grabar por accidente una IP local (192.168.x.x) en una APK de producción.
+ * La app NO muestra ni pide la URL: el usuario solo inicia sesión.
+ * Por defecto se usa el backend de producción. Para probar contra otro
+ * servidor, defina PUBLIC_API_URL en el entorno:
  *
- * Uso recomendado:
- *   npm run mobile:apk:public -- https://tu-servicio
+ *   set PUBLIC_API_URL=https://mi-servidor && npm run mobile:build
  */
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const src = path.join(root, 'public');
+const src = path.join(root, 'mobile', 'app');
 const dest = path.join(root, 'mobile', 'www');
+const { version } = require('../package.json');
 
-const api = (process.env.PUBLIC_API_URL || '').replace(/\/+$/, '');
+const DEFAULT_API = 'https://sigfv.onrender.com';
+const api = String(process.env.PUBLIC_API_URL || DEFAULT_API).trim().replace(/\/+$/, '');
 
-if (!api) {
-  console.warn('ADVERTENCIA: PUBLIC_API_URL no está definida.');
-  console.warn('La APK pedirá la URL del servidor en la pantalla de inicio de sesión.');
-} else if (!/^https?:\/\//i.test(api)) {
+if (!/^https?:\/\//i.test(api)) {
   console.error('ERROR: PUBLIC_API_URL debe empezar con http:// o https://');
   process.exit(1);
-} else if (/^http:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(api)) {
+}
+if (/^http:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(api)) {
   console.warn('ADVERTENCIA: PUBLIC_API_URL es una dirección privada/LAN.');
   console.warn('La APK solo funcionará en esa red. Para uso desde cualquier red use HTTPS público.');
+}
+if (!fs.existsSync(path.join(src, 'index.html'))) {
+  console.error('ERROR: no se encontró mobile/app/index.html');
+  process.exit(1);
 }
 
 fs.rmSync(dest, { recursive: true, force: true });
 fs.mkdirSync(dest, { recursive: true });
 
 for (const f of fs.readdirSync(src)) {
+  if (f === 'config.js') continue;
   const from = path.join(src, f), to = path.join(dest, f);
   const st = fs.statSync(from);
   if (st.isDirectory()) fs.cpSync(from, to, { recursive: true });
@@ -39,13 +44,11 @@ for (const f of fs.readdirSync(src)) {
 }
 
 fs.writeFileSync(path.join(dest, 'config.js'),
-  `// Generado por scripts/build-mobile.js\nwindow.SIGFV_MOBILE = true;\nwindow.SIGFV_API_BASE = ${JSON.stringify(api)};\n`);
+  `// Generado por scripts/build-mobile.js\n` +
+  `window.SIGFV_MOBILE = true;\n` +
+  `window.SIGFV_API_BASE = ${JSON.stringify(api)};\n` +
+  `window.SIGFV_APP_VERSION = ${JSON.stringify(version)};\n`);
 
-const idx = path.join(dest, 'index.html');
-let html = fs.readFileSync(idx, 'utf8');
-html = html.replace('<script>\nconst $=', '<script src="config.js"></script>\n<script>\nconst $=');
-if (!html.includes('config.js')) html = html.replace('</body>', '<script src="config.js"></script></body>');
-fs.writeFileSync(idx, html);
-
-console.log('Interfaz copiada a mobile/www');
-console.log('API por defecto:', api || '(se pedirá en la pantalla de inicio de sesión)');
+console.log('Interfaz móvil copiada a mobile/www');
+console.log('API grabada en la APK:', api);
+console.log('Versión de la app:', version);

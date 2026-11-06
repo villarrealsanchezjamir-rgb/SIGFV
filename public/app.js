@@ -1,0 +1,673 @@
+'use strict';
+/* SIGFV · interfaz de escritorio */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  truck: '<path d="M14 18V6a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1"/><path d="M14 9h4l4 4v5a1 1 0 0 1-1 1h-1"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  'id-card': '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M8 15c-1.7 0-3 .8-3 2h6c0-1.2-1.3-2-3-2Z"/><path d="M14 9h5M14 13h5"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.8 2.8 0 0 1-4-4l9.4-9.4Z"/><path d="M14.7 6.3 17 4a4 4 0 0 1 3 3l-2.3 2.3"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+  clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  fuel: '<path d="M3 22V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 22h10M5 10h6"/><path d="M13 8h2l3 3v7a2 2 0 0 0 4 0v-6l-3-3"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/>',
+  trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
+  building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  package: '<path d="m21 8-9-5-9 5v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  gauge: '<path d="M12 14 8 8"/><path d="M3.3 18a9 9 0 1 1 17.4 0"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check: '<path d="m20 6-11 11-5-5"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="m3 3 18 18M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  map: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'
+};
+const ICON_ALIAS = {
+  'calendar-range': 'calendar', 'file-text': 'file', 'clipboard-check': 'clipboard',
+  'triangle-alert': 'alert', 'circle-alert': 'alert', 'badge-check': 'shield'
+};
+function ic(name, cls = '') {
+  const key = ICON_ALIAS[name] || name;
+  const p = ICONS[key] || ICONS.package;
+  return `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+}
+
+/* ---------- Agrupación de módulos ---------- */
+const GROUP_DEFS = [
+  { id: 'operaciones', title: 'Gestión de Operaciones', icon: 'truck', desc: 'Flota, conductores y asignaciones' },
+  { id: 'mantenimiento', title: 'Gestión de Mantenimiento', icon: 'wrench', desc: 'Servicios e inspecciones técnicas' },
+  { id: 'logistica', title: 'Gestión Logística', icon: 'fuel', desc: 'Combustible y documentación' },
+  { id: 'seguridad', title: 'Gestión de Seguridad', icon: 'shield', desc: 'Incidentes y acciones correctivas' },
+  { id: 'administracion', title: 'Administración', icon: 'settings', desc: 'Usuarios y catálogos maestros' }
+];
+const GROUP_MAP = {
+  vehiculos: 'operaciones', conductores: 'operaciones', asignaciones: 'operaciones',
+  mantenimientos: 'mantenimiento', inspecciones: 'mantenimiento',
+  abastecimientos: 'logistica', documentos: 'logistica',
+  incidentes: 'seguridad',
+  usuarios: 'administracion', empresas: 'administracion', unidades_mineras: 'administracion',
+  marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
+  proveedores_combustible: 'administracion', talleres: 'administracion'
+};
+
+const state = {
+  token: sessionStorage.getItem('sigfv_token') || '',
+  meta: null, current: null, page: 1, q: '', limit: 20,
+  cats: {}, request: 0, dirty: false, collapsed: JSON.parse(localStorage.getItem('sigfv_nav_collapsed') || '{}')
+};
+
+const BADGE_COLORS = {
+  conforme: '#26865B', activo: '#26865B', vigente: '#26865B', completado: '#26865B', cerrado: '#26865B', finalizada: '#26865B',
+  no_conforme: '#C64747', vencido: '#C64747', inhabilitado: '#C64747', inactivo: '#C64747', cancelada: '#C64747', cancelado: '#C64747',
+  'por vencer': '#A98624', programado: '#447BA8', programada: '#447BA8', activa: '#447BA8', en_proceso: '#A98624',
+  en_investigacion: '#A98624', pendiente: '#C64747', en_curso: '#447BA8', cumplida: '#26865B',
+  operativo: '#26865B', 'en mantenimiento': '#A98624', 'fuera de servicio': '#C64747', alquilado: '#447BA8', 'de baja': '#42464B'
+};
+const badge = v => {
+  const k = String(v ?? '').toLowerCase();
+  return `<span class="tag" style="background:${BADGE_COLORS[k] || '#42464B'}"><span class="d"></span>${esc(String(v ?? '').replace(/_/g, ' '))}</span>`;
+};
+
+async function api(path, opts = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout || 25000);
+  const headers = { 'Content-Type': 'application/json' };
+  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  try {
+    const res = await fetch(path, {
+      method: opts.method || 'GET',
+      headers,
+      body: opts.body != null ? JSON.stringify(opts.body) : undefined,
+      signal: ctrl.signal,
+      cache: 'no-store'
+    });
+    let data = {};
+    try { data = await res.json(); } catch { }
+    if (res.status === 401 && path !== '/api/auth/login') { logout(true); throw new Error('La sesión venció. Vuelva a ingresar.'); }
+    if (!res.ok) throw new Error(data.error || 'Error ' + res.status);
+    return data;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('El servidor tardó demasiado. Verifique la conexión e intente de nuevo.');
+    if (e instanceof TypeError) throw new Error('No se pudo conectar con el servidor. Reintentando…');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+async function apiRetry(path, opts = {}, tries = 2) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await api(path, opts); } catch (e) { last = e; if (i < tries - 1) await sleep(900); }
+  }
+  throw last;
+}
+
+function toast(msg, isError = false) {
+  const t = $('#toast');
+  t.innerHTML = ic(isError ? 'alert' : 'check') + '<span>' + esc(msg) + '</span>';
+  t.className = 'on' + (isError ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = ''; }, 3600);
+}
+
+function fmt(v) {
+  if (v == null || v === '') return '—';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s)) {
+    const d = new Date(s.replace(' ', 'T'));
+    if (!isNaN(d)) return d.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  return s;
+}
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('es-PE', { maximumFractionDigits: 2 }) : '—';
+}
+function initials(name) {
+  return String(name || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+}
+
+/* ---------- Agrupación y navegación ---------- */
+function buildGroups() {
+  const groups = GROUP_DEFS.map(g => ({ ...g, items: [] }));
+  const byId = Object.fromEntries(groups.map(g => [g.id, g]));
+  for (const [key, r] of Object.entries(state.meta.resources)) {
+    const gid = GROUP_MAP[key] || (r.group === 'Catálogos' || r.group === 'Configuración' ? 'administracion' : 'operaciones');
+    (byId[gid] || byId.operaciones).items.push({ key, ...r });
+  }
+  return groups.filter(g => g.items.length);
+}
+function groupNameOf(key) {
+  const gid = GROUP_MAP[key];
+  const g = GROUP_DEFS.find(x => x.id === gid);
+  return g ? g.title : 'Módulos';
+}
+function toastError(e) { toast(e.message || 'Ocurrió un error.', true); }
+
+/* ---------- Sesión ---------- */
+function showLogin() {
+  $('#app').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  setTimeout(() => $('#usuario').focus(), 60);
+}
+function logout(silent = false) {
+  sessionStorage.removeItem('sigfv_token');
+  state.token = ''; state.meta = null; state.current = null;
+  closeDrawer();
+  showLogin();
+  if (!silent) toast('Sesión cerrada.');
+}
+async function login(usuario, password) {
+  const r = await api('/api/auth/login', { method: 'POST', body: { usuario, password } });
+  state.token = r.token;
+  sessionStorage.setItem('sigfv_token', r.token);
+}
+async function boot() {
+  if (!state.token) { showLogin(); return; }
+  try {
+    state.meta = await apiRetry('/api/meta');
+    renderShell();
+    navigate(state.meta.dashboard ? 'dashboard' : Object.keys(state.meta.resources)[0] || '');
+  } catch (e) {
+    if (e.message.includes('sesión')) return;
+    showLogin();
+    $('#loginError').textContent = e.message;
+  }
+}
+
+/* ---------- Shell ---------- */
+function renderShell() {
+  $('#login').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  const name = state.meta.user || 'Usuario';
+  const roles = (state.meta.roles || []).join(', ');
+  $('#avatar').textContent = initials(name);
+  $('#avatar').title = name + (roles ? ' · ' + roles : '');
+  $('#sideAvatar').textContent = initials(name);
+  $('#sideName').textContent = name;
+  $('#sideRoles').textContent = roles || 'Sin rol asignado';
+  renderNav();
+  $('#nav').onclick = e => {
+    const item = e.target.closest('.nav-item');
+    if (item) { navigate(item.dataset.key); return; }
+    const head = e.target.closest('.nav-head');
+    if (head) {
+      const g = head.parentElement;
+      g.classList.toggle('closed');
+      const id = g.dataset.group;
+      state.collapsed[id] = g.classList.contains('closed');
+      localStorage.setItem('sigfv_nav_collapsed', JSON.stringify(state.collapsed));
+    }
+  };
+  $('#logout').onclick = () => logout();
+  $('#bell').onclick = () => navigate('notificaciones');
+  $('#menuBtn').onclick = () => $('#sidebar').classList.add('open') || $('#scrim').classList.add('on');
+  $('#scrim').onclick = closeSidebar;
+  $('#moduleFilter').oninput = e => filterNav(e.target.value);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeSidebar(); closeDrawer(); }
+    if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+      e.preventDefault();
+      const s = $('#q'); if (s) s.focus();
+    }
+  });
+  if (state.meta.notificaciones) {
+    $('#bell').classList.remove('hidden');
+    api('/api/notificaciones').then(n => setBell(n.length)).catch(() => { });
+  } else $('#bell').classList.add('hidden');
+}
+function setBell(n) {
+  const b = $('#bellCount');
+  if (!b) return;
+  b.textContent = n > 99 ? '99+' : n;
+  b.classList.toggle('hidden', !n);
+}
+function renderNav() {
+  const groups = buildGroups();
+  let html = '';
+  if (state.meta.dashboard) html += `<div class="nav-title">Principal</div><button class="nav-item" data-key="dashboard">${ic('dashboard')}Dashboard</button>`;
+  if (state.meta.notificaciones) html += `<button class="nav-item" data-key="notificaciones">${ic('bell')}Notificaciones<span class="pill" id="navBell">0</span></button>`;
+  for (const g of groups) {
+    const closed = state.collapsed[g.id] ? ' closed' : '';
+    html += `<div class="nav-group${closed}" data-group="${g.id}">
+      <button class="nav-head">${ic(g.icon)}<span>${esc(g.title)}</span>${ic('down', 'sm chev')}</button>
+      <div class="nav-items">${g.items.map(r => `<button class="nav-item" data-key="${r.key}">${ic(r.icon || 'package')}${esc(r.label)}</button>`).join('')}</div>
+    </div>`;
+  }
+  $('#nav').innerHTML = html;
+  const navBell = $('#navBell'), bellCount = $('#bellCount');
+  if (navBell && bellCount) navBell.textContent = bellCount.textContent;
+}
+function filterNav(q) {
+  q = q.toLowerCase().trim();
+  $$('#nav .nav-group').forEach(g => {
+    let visible = 0;
+    $$('.nav-item', g).forEach(a => {
+      const show = !q || a.textContent.toLowerCase().includes(q);
+      a.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    g.style.display = visible ? '' : 'none';
+    if (q) g.classList.remove('closed');
+  });
+}
+function closeSidebar() { $('#sidebar').classList.remove('open'); $('#scrim').classList.remove('on'); }
+
+function navigate(key) {
+  closeSidebar();
+  state.current = key;
+  state.page = 1;
+  state.q = '';
+  $$('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.key === key));
+  if (key === 'dashboard') renderDashboard();
+  else if (key === 'notificaciones') renderNotifications();
+  else renderList(key);
+}
+function crumb(parts) {
+  $('#crumb').innerHTML = parts.map((p, i) => i ? `<span class="sep">/</span><span>${esc(p)}</span>` : `<b>${esc(p)}</b>`).join('');
+}
+
+/* ---------- Dashboard ---------- */
+const KPI_DEFS = [
+  ['total', 'Vehículos registrados', 'truck', 'gold', 'en la flota'],
+  ['conductores', 'Conductores activos', 'id-card', 'ok', 'habilitados'],
+  ['insp_nc', 'Inspecciones no conformes', 'clipboard', 'bad', 'últimos 30 días'],
+  ['docs', 'Documentos por vencer', 'file', 'warn', 'requieren atención'],
+  ['mant', 'Mantenimientos programados', 'wrench', 'info', 'pendientes'],
+  ['litros', 'Combustible del mes', 'fuel', '', 'litros registrados'],
+  ['incidentes', 'Incidentes abiertos', 'alert', 'bad', 'en investigación']
+];
+async function renderDashboard() {
+  crumb(['Dashboard']);
+  const view = $('#view');
+  view.innerHTML = `<div class="page-head"><div><h1>Dashboard general</h1><p>Resumen operativo calculado desde la base de datos.</p></div><div class="spacer"></div><div class="head-actions"><button class="btn ghost" id="refreshDash">${ic('refresh')}Actualizar</button></div></div>
+  <div class="kpis">${Array.from({ length: 7 }, () => '<div class="kpi"><div class="skel" style="width:70%"></div><div class="skel" style="width:40%;height:30px;margin-top:12px"></div></div>').join('')}</div>`;
+  $('#refreshDash').onclick = renderDashboard;
+  try {
+    const d = await apiRetry('/api/dashboard');
+    const k = d.k || {};
+    const total = Math.max(1, ...(d.estados || []).map(e => e.n));
+    const quick = Object.entries(state.meta.resources).slice(0, 6);
+    view.innerHTML = `
+      <div class="page-head"><div><h1>Dashboard general</h1><p>Resumen operativo calculado desde la base de datos.</p></div><div class="spacer"></div>
+      <div class="head-actions"><button class="btn ghost" id="refreshDash">${ic('refresh')}Actualizar</button><button class="btn primary" id="dashNew">${ic('plus')}Nuevo registro</button></div></div>
+      <div class="kpis">${KPI_DEFS.map(([key, label, icon, tone, hint]) => `
+        <article class="kpi ${tone}"><div class="k-top"><span>${label}</span><span class="k-ico">${ic(icon)}</span></div>
+        <strong>${key === 'litros' ? num(k[key]) : Number(k[key] || 0).toLocaleString('es-PE')}</strong><small>${hint}</small></article>`).join('')}
+      </div>
+      <div class="dash-grid">
+        <div>
+          <section class="card" style="margin-bottom:14px">
+            <div class="card-head">${ic('gauge')}<h3>Disponibilidad de la flota</h3><span class="spacer"></span><span class="muted" style="font-size:12px">${(d.estados || []).reduce((a, e) => a + e.n, 0)} unidades</span></div>
+            <div class="card-body bars">${(d.estados || []).map(e => `<div class="bar-row"><span>${esc(e.nombre)}</span><div class="track"><div class="fill" style="width:${e.n / total * 100}%;background:${esc(e.color || '#42464B')}"></div></div><b>${e.n}</b></div>`).join('') || '<span class="muted">Sin datos de estado.</span>'}</div>
+          </section>
+          <section class="card">
+            <div class="card-head">${ic('plus')}<h3>Accesos rápidos</h3></div>
+            <div class="card-body"><div class="quick" style="margin-top:0">${quick.map(([key, r]) => `<a href="#" data-go="${key}">${ic(r.icon || 'package')}<span>${esc(r.label)}</span></a>`).join('')}</div></div>
+          </section>
+        </div>
+        <div>
+          <section class="card" style="margin-bottom:14px">
+            <div class="card-head">${ic('wrench')}<h3>Próximos mantenimientos</h3><span class="spacer"></span><a href="#" data-go="mantenimientos" class="muted" style="font-size:12px">Ver todos</a></div>
+            <div class="card-body mini-list">${(d.mant || []).map(m => `<div class="mini-row"><span class="m-ico">${ic('wrench')}</span><div class="m-main"><strong>${esc(m.vehiculo)}</strong><small>${esc(m.tipo)}</small></div><span class="m-date">${fmt(m.fecha)}</span></div>`).join('') || '<span class="muted">No hay mantenimientos programados.</span>'}</div>
+          </section>
+          <section class="card">
+            <div class="card-head">${ic('file')}<h3>Documentos por vencer</h3><span class="spacer"></span><a href="#" data-go="documentos" class="muted" style="font-size:12px">Ver todos</a></div>
+            <div class="card-body mini-list">${(d.docs || []).map(x => `<div class="mini-row"><span class="m-ico">${ic('file')}</span><div class="m-main"><strong>${esc(x.titular || '—')}</strong><small>${esc(x.documento)}</small></div><span class="m-date">${fmt(x.vence)}</span></div>`).join('') || '<span class="muted">No hay documentos próximos a vencer.</span>'}</div>
+          </section>
+        </div>
+      </div>`;
+    $('#refreshDash').onclick = renderDashboard;
+    $('#dashNew').onclick = () => { const first = Object.keys(state.meta.resources).find(k => state.meta.resources[k].crear); if (first) { navigate(first); setTimeout(() => openForm(first), 220); } else toast('No tiene permisos para crear registros.', true); };
+    view.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); navigate(a.dataset.go); });
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo cargar el dashboard</strong><span>${esc(e.message)}</span><button class="btn primary" id="retryDash">Reintentar</button></div>`;
+    $('#retryDash').onclick = renderDashboard;
+  }
+}
+
+/* ---------- Listados ---------- */
+const isNumeric = v => v != null && v !== '' && !isNaN(Number(v)) && !/^\d{4}-\d{2}-\d{2}/.test(String(v));
+function renderList(key) {
+  const r = state.meta.resources[key];
+  if (!r) { $('#view').innerHTML = '<div class="empty"><strong>Módulo no disponible.</strong></div>'; return; }
+  crumb([groupNameOf(key), r.label]);
+  state.q = '';
+  $('#view').innerHTML = `
+    <div class="page-head">
+      <div><h1>${esc(r.label)}</h1><p>Consulte, registre y administre ${esc(r.label.toLowerCase())}.</p></div>
+      <div class="spacer"></div>
+      <div class="head-actions">
+        ${r.exportar ? `<button class="btn ghost" id="btnExport">${ic('download')}Exportar CSV</button>` : ''}
+        ${r.crear ? `<button class="btn primary" id="btnNew">${ic('plus')}Registrar</button>` : ''}
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="search">${ic('search')}<input id="q" placeholder="Buscar en ${esc(r.label.toLowerCase())}…" autocomplete="off"></div>
+      <span class="muted" id="count" style="font-size:12.5px"></span>
+    </div>
+    <div class="table-card"><div class="table-wrap" id="tableWrap"></div><div class="pager" id="pager"></div></div>`;
+  $('#q').oninput = e => {
+    state.q = e.target.value.trim();
+    state.page = 1;
+    clearTimeout(renderList._t);
+    renderList._t = setTimeout(loadRows, 300);
+  };
+  if ($('#btnNew')) $('#btnNew').onclick = () => openForm(key);
+  if ($('#btnExport')) $('#btnExport').onclick = exportCSV;
+  loadRows();
+}
+async function loadRows() {
+  const key = state.current, r = state.meta.resources[key];
+  if (!r) return;
+  const req = ++state.request;
+  const wrap = $('#tableWrap'), pager = $('#pager');
+  wrap.innerHTML = `<div style="padding:18px 16px;display:grid;gap:10px">${Array.from({ length: 7 }, () => '<div class="skel" style="width:' + (55 + Math.random() * 35).toFixed(0) + '%"></div>').join('')}</div>`;
+  pager.innerHTML = '';
+  try {
+    const d = await apiRetry(`/api/r/${key}?pagina=${state.page}&limit=${state.limit}&q=${encodeURIComponent(state.q)}`);
+    if (req !== state.request) return;
+    $('#count').textContent = `${d.total} registro${d.total === 1 ? '' : 's'}`;
+    if (!d.items.length) {
+      wrap.innerHTML = `<div class="empty"><span class="big">${ic(state.q ? 'search' : 'package')}</span><strong>${state.q ? 'Ningún resultado' : 'Aún no hay registros'}</strong><span>${state.q ? 'Pruebe con otro término de búsqueda.' : 'Use «Registrar» para crear el primero.'}</span></div>`;
+      pager.innerHTML = '';
+      return;
+    }
+    const cols = r.cols;
+    wrap.innerHTML = `<table><thead><tr>${cols.map(c => `<th>${esc(c[1])}</th>`).join('')}<th style="text-align:right">Acciones</th></tr></thead><tbody>
+      ${d.items.map(x => `<tr data-id="${x.id}">
+        ${cols.map(c => {
+          const raw = x[c[0]];
+          const content = c[2] === 'badge' ? badge(raw) : esc(isNumeric(raw) ? num(raw) : fmt(raw));
+          return `<td class="${isNumeric(raw) ? 'num' : ''}">${content}</td>`;
+        }).join('')}
+        <td><div class="row-actions">
+          ${r.editar ? `<button title="Editar" data-edit="${x.id}">${ic('edit')}</button>` : ''}
+          ${r.eliminar ? `<button class="del" title="Eliminar" data-del="${x.id}">${ic('trash')}</button>` : ''}
+        </div></td></tr>`).join('')}
+    </tbody></table>`;
+    wrap.querySelectorAll('tbody tr').forEach(tr => {
+      tr.onclick = e => {
+        if (e.target.closest('button')) return;
+        openForm(key, +tr.dataset.id);
+      };
+    });
+    wrap.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openForm(key, +b.dataset.edit));
+    wrap.querySelectorAll('[data-del]').forEach(b => b.onclick = () => confirmDelete(key, +b.dataset.del));
+    renderPager(d.total);
+  } catch (e) {
+    if (req !== state.request) return;
+    wrap.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo cargar</strong><span>${esc(e.message)}</span><button class="btn primary" id="retryRows">Reintentar</button></div>`;
+    const b = $('#retryRows'); if (b) b.onclick = loadRows;
+  }
+}
+function renderPager(total) {
+  const pages = Math.max(1, Math.ceil(total / state.limit));
+  const cur = Math.min(state.page, pages);
+  if (state.page > pages) { state.page = pages; loadRows(); return; }
+  const nums = [];
+  const from = Math.max(1, Math.min(cur - 2, pages - 4));
+  const to = Math.min(pages, from + 4);
+  for (let i = from; i <= to; i++) nums.push(i);
+  $('#pager').innerHTML = `
+    <button id="pgPrev" ${cur < 2 ? 'disabled' : ''}>${ic('back', 'sm')} Anterior</button>
+    <div class="pages">${nums.map(n => `<button class="${n === cur ? 'on' : ''}" data-p="${n}">${n}</button>`).join('')}</div>
+    <span class="spacer"></span>
+    <span>Página ${cur} de ${pages} · ${total} registros</span>
+    <button id="pgNext" ${cur >= pages ? 'disabled' : ''}>Siguiente ${ic('chevron', 'sm')}</button>`;
+  const go = n => { state.page = n; loadRows(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#pgPrev').onclick = () => cur > 1 && go(cur - 1);
+  $('#pgNext').onclick = () => cur < pages && go(cur + 1);
+  $$('#pager [data-p]').forEach(b => b.onclick = () => go(+b.dataset.p));
+}
+
+/* ---------- Formulario (drawer) ---------- */
+function openDrawer() {
+  $('#drawer').classList.add('open');
+  $('#drawerScrim').classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer(force = false) {
+  if (!force && state.dirty) {
+    if (!confirm('Hay cambios sin guardar. ¿Desea descartarlos?')) return;
+  }
+  $('#drawer').classList.remove('open');
+  $('#drawerScrim').classList.remove('on');
+  document.body.style.overflow = '';
+  state.dirty = false;
+}
+$('#drawerScrim') && ($('#drawerScrim').onclick = () => closeDrawer());
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('#drawer').classList.contains('open')) closeDrawer();
+});
+
+async function openForm(key, id) {
+  const r = state.meta.resources[key];
+  if (!r) return;
+  if (key !== state.current) { state.current = key; }
+  state.dirty = false;
+  $('#drawerHead').innerHTML = `<div><small>${esc(groupNameOf(key))}</small><h2>${id ? 'Editar' : 'Registrar'} · ${esc(r.label)}</h2></div><button class="icon-btn" id="drawerClose" title="Cerrar">${ic('x')}</button>`;
+  $('#drawerBody').innerHTML = '<div style="display:grid;gap:12px;padding-top:8px">' + Array.from({ length: 6 }, () => '<div class="skel" style="height:38px"></div>').join('') + '</div>';
+  $('#drawerFoot').innerHTML = '';
+  openDrawer();
+  $('#drawerClose').onclick = () => closeDrawer();
+  try {
+    let v = {};
+    const [item, catPairs] = await Promise.all([
+      id ? api(`/api/r/${key}/${id}`) : Promise.resolve({}),
+      Promise.all(r.fields.filter(f => f.cat).map(async f => [f.cat, await getCat(f.cat)]))
+    ]);
+    v = item || {};
+    const cats = Object.fromEntries(catPairs);
+    renderForm(key, r, v, cats, id);
+  } catch (e) {
+    $('#drawerBody').innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo abrir el formulario</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+async function getCat(name) {
+  if (!state.cats[name]) state.cats[name] = await api(`/api/cat/${name}`);
+  return state.cats[name];
+}
+function dtLocal(val) {
+  if (!val) return '';
+  const s = String(val);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && /([zZ]|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+  }
+  return s.replace(' ', 'T').slice(0, 16);
+}
+function fieldControl(f, value) {
+  const val = value ?? '';
+  const attrs = `name="${esc(f.n)}" id="f_${esc(f.n)}" ${f.req ? 'required' : ''}`;
+  if (f.t === 'select') {
+    let opts;
+    if (f.cat) opts = (state.cats[f.cat] || []).map(x => [x.id, x.nombre]);
+    else opts = f.o || [];
+    return `<select class="input" ${attrs}><option value="">${f.req ? 'Seleccione…' : '—'}</option>${opts.map(([a, b]) => `<option value="${esc(a)}" ${String(val) === String(a) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+  }
+  if (f.t === 'textarea') return `<textarea class="input" ${attrs} rows="3" placeholder="${esc(f.l)}">${esc(val)}</textarea>`;
+  let type = f.t === 'datetime' ? 'datetime-local' : f.t;
+  let v = val;
+  if (f.t === 'datetime' && val) v = dtLocal(val);
+  return `<input class="input" ${attrs} type="${type}" ${f.t === 'number' ? 'step="any" inputmode="decimal"' : ''} ${f.t === 'password' ? 'autocomplete="new-password" minlength="8"' : ''} value="${esc(v)}">`;
+}
+function renderForm(key, r, v, cats, id) {
+  state.cats = cats;
+  const short = /^(text|number|date|datetime|password)$/;
+  const fields = r.fields.map(f => {
+    const wide = f.t === 'textarea' || f.t === 'password';
+    return `<div class="field ${wide ? 'wide' : ''}"><label for="f_${esc(f.n)}">${esc(f.l)}${f.req ? ' <span class="req">*</span>' : ''}</label>${fieldControl(f, v[f.n])}</div>`;
+  }).join('');
+  $('#drawerBody').innerHTML = `
+    <div class="form-grid">
+      <div class="form-section">Datos del registro</div>
+      ${fields}
+    </div>
+    ${id && r.eliminar ? `<div class="danger-zone"><button type="button" class="btn danger" id="btnDelete">${ic('trash')}Eliminar registro</button><p class="muted" style="font-size:11.5px;margin-top:6px">El registro quedará dado de baja y no aparecerá en los listados.</p></div>` : ''}`;
+  $('#drawerFoot').innerHTML = `<button type="button" class="btn ghost" id="btnCancel">Cancelar</button><span class="spacer"></span><button type="submit" class="btn primary" id="btnSave">${ic('check')}${id ? 'Guardar cambios' : 'Registrar'}</button>`;
+  $('#drawerBody').querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('input', () => { state.dirty = true; });
+    el.addEventListener('change', () => { state.dirty = true; });
+  });
+  $('#btnCancel').onclick = () => closeDrawer();
+  if ($('#btnDelete')) $('#btnDelete').onclick = () => confirmDelete(key, id);
+  $('#drawerForm').onsubmit = async e => {
+    e.preventDefault();
+    const body = {};
+    new FormData($('#drawerForm')).forEach((x, k) => { body[k] = x; });
+    const btn = $('#btnSave');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="skel" style="width:16px;height:16px;border-radius:50%"></span>Guardando…';
+    try {
+      await api(id ? `/api/r/${key}/${id}` : `/api/r/${key}`, { method: id ? 'PUT' : 'POST', body });
+      state.cats = {};
+      state.dirty = false;
+      closeDrawer(true);
+      toast(id ? 'Cambios guardados.' : 'Registro creado.');
+      if (state.current === key && !$('#view').querySelector('.empty')) loadRows(); else navigate(key);
+    } catch (x) {
+      btn.disabled = false;
+      btn.innerHTML = ic('check') + (id ? 'Guardar cambios' : 'Registrar');
+      toast(x.message, true);
+    }
+  };
+  setTimeout(() => { const first = $('#drawerBody input,#drawerBody select,#drawerBody textarea'); if (first) first.focus(); }, 120);
+}
+
+/* ---------- Eliminar ---------- */
+function confirmDelete(key, id) {
+  const r = state.meta.resources[key] || {};
+  const dlg = $('#confirmDlg');
+  $('#confirmTitle').textContent = 'Eliminar registro';
+  $('#confirmText').textContent = `¿Confirma que desea eliminar este registro de ${r.label || 'la lista'}? Esta acción lo dará de baja.`;
+  dlg.showModal();
+  const done = ok => { dlg.close(); if (ok) doDelete(key, id); };
+  $('#confirmOk').onclick = () => done(true);
+  $('#confirmCancel').onclick = () => done(false);
+  dlg.oncancel = () => { dlg.close(); };
+}
+async function doDelete(key, id) {
+  try {
+    await api(`/api/r/${key}/${id}`, { method: 'DELETE' });
+    state.dirty = false;
+    closeDrawer(true);
+    toast('Registro eliminado.');
+    loadRows();
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- Notificaciones ---------- */
+let notifData = [];
+let notifFilter = 'todas';
+async function renderNotifications() {
+  crumb(['Alertas', 'Notificaciones']);
+  const view = $('#view');
+  view.innerHTML = `<div class="page-head"><div><h1>Notificaciones</h1><p>Alertas generadas a partir de los registros vigentes.</p></div></div><div class="card"><div class="card-body"><div class="skel" style="width:60%"></div></div></div>`;
+  try {
+    notifData = await apiRetry('/api/notificaciones');
+    setBell(notifData.length);
+    const filters = ['todas', 'documentos', 'licencias', 'inspecciones', 'incidentes', 'vehículos'];
+    const matchType = tipo => {
+      const t = String(tipo).toLowerCase();
+      if (notifFilter === 'todas') return true;
+      if (notifFilter === 'documentos') return t.startsWith('documento');
+      if (notifFilter === 'licencias') return t.startsWith('licencia');
+      if (notifFilter === 'inspecciones') return t.startsWith('inspecci');
+      if (notifFilter === 'incidentes') return t.startsWith('incidente');
+      return t.startsWith('vehículo');
+    };
+    const count = f => {
+      if (f === 'todas') return notifData.length;
+      const t0 = f === 'documentos' ? 'documento' : f === 'licencias' ? 'licencia' : f === 'inspecciones' ? 'inspecci' : f === 'incidentes' ? 'incidente' : 'vehículo';
+      return notifData.filter(n => String(n.tipo).toLowerCase().startsWith(t0)).length;
+    };
+    const items = notifData.filter(n => matchType(n.tipo));
+    view.innerHTML = `
+      <div class="page-head"><div><h1>Notificaciones</h1><p>${notifData.length} alertas activas en el sistema.</p></div><div class="spacer"></div><button class="btn ghost" id="refreshNotif">${ic('refresh')}Actualizar</button></div>
+      <div class="toolbar" id="notifChips">${filters.map(f => `<button class="btn ${f === notifFilter ? 'primary' : 'ghost'}" data-f="${f}" style="padding:7px 12px;font-size:12.5px">${esc(f[0].toUpperCase() + f.slice(1))} <span style="opacity:.7">${count(f)}</span></button>`).join('')}</div>
+      <div class="table-card"><div class="card-body mini-list">${items.length ? items.map(n => {
+        const t = String(n.tipo).toLowerCase();
+        const icon = t.startsWith('documento') ? 'file' : t.startsWith('licencia') ? 'id-card' : t.startsWith('inspección') ? 'clipboard' : t.startsWith('incidente') ? 'alert' : 'truck';
+        const color = t.includes('vencid') ? '#C64747' : t.includes('por vencer') ? '#A98624' : '#447BA8';
+        return `<div class="mini-row"><span class="m-ico" style="color:${color}">${ic(icon)}</span><div class="m-main"><strong>${esc(n.detalle)}</strong><small>${esc(n.tipo)}</small></div><span class="m-date">${fmt(n.fecha)}</span></div>`;
+      }).join('') : '<div class="empty"><span class="big">' + ic('check') + '</span><strong>Sin alertas en esta categoría</strong><span>Todo en orden por ahora.</span></div>'}</div></div>`;
+    $('#refreshNotif').onclick = renderNotifications;
+    $$('#notifChips [data-f]').forEach(b => b.onclick = () => { notifFilter = b.dataset.f; renderNotifications(); });
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar las alertas</strong><span>${esc(e.message)}</span><button class="btn primary" id="retryNotif">Reintentar</button></div>`;
+    $('#retryNotif').onclick = renderNotifications;
+  }
+}
+
+/* ---------- Exportar ---------- */
+async function exportCSV() {
+  const key = state.current, r = state.meta.resources[key];
+  try {
+    const d = await api(`/api/r/${key}?limit=5000&q=${encodeURIComponent(state.q)}`);
+    const cols = r.cols.map(x => x[0]);
+    const rows = [r.cols.map(x => x[1]), ...d.items.map(x => cols.map(k => x[k]))];
+    const csv = '\ufeff' + rows.map(line => line.map(s => {
+      s = String(s ?? '');
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    }).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = key + '.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('CSV exportado.');
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- Arranque ---------- */
+$('#loginForm').onsubmit = async e => {
+  e.preventDefault();
+  const btn = $('#loginBtn'), err = $('#loginError');
+  err.textContent = '';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="skel" style="width:16px;height:16px;border-radius:50%"></span>Ingresando…';
+  try {
+    await login($('#usuario').value.trim(), $('#password').value);
+    state.meta = await apiRetry('/api/meta');
+    renderShell();
+    navigate(state.meta.dashboard ? 'dashboard' : Object.keys(state.meta.resources)[0] || '');
+  } catch (x) {
+    err.textContent = x.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+};
+$('#togglePw').onclick = () => {
+  const p = $('#password');
+  const show = p.type === 'password';
+  p.type = show ? 'text' : 'password';
+  $('#togglePw').innerHTML = ic(show ? 'eyeoff' : 'eye');
+};
+$('#confirmDlg').addEventListener('close', () => { $('#confirmOk').onclick = null; $('#confirmCancel').onclick = null; });
+boot();

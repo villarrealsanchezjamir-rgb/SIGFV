@@ -1,8 +1,9 @@
 /*
- * Compila la APK release con una URL pública HTTPS grabada.
+ * Compila la APK release con la URL del backend grabada en el código.
  *
- * Uso:
- *   npm run mobile:apk:public -- https://sigfv.example.com
+ * Por defecto usa https://sigfv.onrender.com (no se muestra en la app).
+ * Para generar una APK contra otro servidor:
+ *   npm run mobile:apk:public -- https://otro-servidor
  *
  * Requisitos en Windows:
  *   - JDK 21
@@ -45,11 +46,12 @@ function ensureJava21() {
   else console.warn('ADVERTENCIA: JAVA_HOME no está definido. Si Gradle falla, configure JDK 21.');
 }
 
-const url = (process.argv[2] || '').trim().replace(/\/+$/, '');
+const DEFAULT_API = 'https://sigfv.onrender.com';
+const url = String(process.argv[2] || DEFAULT_API).trim().replace(/\/+$/, '');
 
 if (!/^https:\/\/[^/]+/i.test(url)) {
+  console.error('La URL del backend debe ser HTTPS.');
   console.error('Uso: npm run mobile:apk:public -- https://tu-servicio-publico');
-  console.error('La URL debe ser HTTPS.');
   process.exit(1);
 }
 
