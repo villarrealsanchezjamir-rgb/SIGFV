@@ -34,6 +34,7 @@ const ICONS = {
   gauge: '<path d="M12 14 8 8"/><path d="M3.3 18a9 9 0 1 1 17.4 0"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   check: '<path d="m20 6-11 11-5-5"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.5 12.5 9-9M16 7l3 3M19 4l2 2"/>',
   back: '<path d="m15 18-6-6 6-6"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
   eyeoff: '<path d="m3 3 18 18M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8"/>',
@@ -65,13 +66,14 @@ const GROUP_MAP = {
   incidentes: 'seguridad',
   usuarios: 'administracion', empresas: 'administracion', unidades_mineras: 'administracion',
   marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
-  proveedores_combustible: 'administracion', talleres: 'administracion'
+  proveedores_combustible: 'administracion', talleres: 'administracion', roles: 'administracion'
 };
 
 const state = {
   token: sessionStorage.getItem('sigfv_token') || '',
   meta: null, current: null, page: 1, q: '', limit: 20,
-  cats: {}, request: 0, dirty: false, collapsed: JSON.parse(localStorage.getItem('sigfv_nav_collapsed') || '{}')
+  cats: {}, request: 0, dirty: false, collapsed: JSON.parse(localStorage.getItem('sigfv_nav_collapsed') || '{}'),
+  companies: [], contextLoaded: false, rolesCache: [], companyDetail: null
 };
 
 const BADGE_COLORS = {
@@ -168,21 +170,65 @@ function toastError(e) { toast(e.message || 'Ocurrió un error.', true); }
 function showLogin() {
   $('#app').classList.add('hidden');
   $('#login').classList.remove('hidden');
-  setTimeout(() => $('#usuario').focus(), 60);
+  setTimeout(() => $('#empresa').focus(), 60);
 }
 function logout(silent = false) {
   sessionStorage.removeItem('sigfv_token');
+  sessionStorage.removeItem('sigfv_session');
   state.token = ''; state.meta = null; state.current = null;
   closeDrawer();
   showLogin();
   if (!silent) toast('Sesión cerrada.');
 }
-async function login(usuario, password) {
-  const r = await api('/api/auth/login', { method: 'POST', body: { usuario, password } });
+function can(mod, action) {
+  return !!state.meta && (state.meta.permissions || []).includes(`${mod}:${action}`);
+}
+async function loadContext(force = false) {
+  if (state.contextLoaded && !force) return;
+  const ctx = await api('/api/auth/context', { timeout: 35000 });
+  state.companies = ctx.empresas || [];
+  state.contextLoaded = true;
+  const sel = $('#empresa');
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">Seleccione su empresa…</option>' + state.companies
+    .map(c => `<option value="${c.id}">${esc(c.razonSocial)}${c.id === 0 ? ' · acceso global' : ''}</option>`).join('');
+  if (keep && state.companies.some(c => String(c.id) === keep)) {
+    sel.value = keep;
+    fillRoles();
+  } else {
+    $('#rol').innerHTML = '<option value="">Seleccione una empresa</option>';
+    $('#rol').disabled = true;
+  }
+}
+function fillRoles() {
+  const company = state.companies.find(c => String(c.id) === $('#empresa').value);
+  const sel = $('#rol');
+  if (!company) {
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Seleccione una empresa</option>';
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = '<option value="">Seleccione su rol…</option>' + company.roles
+    .map(r => `<option value="${r.rolId}">${esc(r.nombre)}${r.descripcion ? ' · ' + esc(r.descripcion) : ''}</option>`).join('');
+}
+async function login(empresaId, rolId, password, operador) {
+  const r = await api('/api/auth/login', {
+    method: 'POST',
+    body: { empresaId, rolId, password, operador: operador || null },
+    timeout: 45000
+  });
   state.token = r.token;
   sessionStorage.setItem('sigfv_token', r.token);
+  sessionStorage.setItem('sigfv_session', JSON.stringify({
+    rol: r.rol, empresa: r.empresa, empresaId: r.empresaId, operador: r.operador
+  }));
 }
 async function boot() {
+  loadContext().catch(() => {
+    $('#empresa').innerHTML = '<option value="">No se pudieron cargar las empresas</option>';
+    $('#loginError').textContent = 'No se pudo conectar con el servidor. Verifique su conexión.';
+  });
   if (!state.token) { showLogin(); return; }
   try {
     state.meta = await apiRetry('/api/meta');
@@ -201,11 +247,12 @@ function renderShell() {
   $('#app').classList.remove('hidden');
   const name = state.meta.user || 'Usuario';
   const roles = (state.meta.roles || []).join(', ');
+  const company = state.meta.empresa || '';
   $('#avatar').textContent = initials(name);
-  $('#avatar').title = name + (roles ? ' · ' + roles : '');
+  $('#avatar').title = name + (roles ? ' · ' + roles : '') + (company ? ' · ' + company : '');
   $('#sideAvatar').textContent = initials(name);
   $('#sideName').textContent = name;
-  $('#sideRoles').textContent = roles || 'Sin rol asignado';
+  $('#sideRoles').textContent = [roles, company].filter(Boolean).join(' · ') || 'Sin rol asignado';
   renderNav();
   $('#nav').onclick = e => {
     const item = e.target.closest('.nav-item');
@@ -247,6 +294,7 @@ function renderNav() {
   let html = '';
   if (state.meta.dashboard) html += `<div class="nav-title">Principal</div><button class="nav-item" data-key="dashboard">${ic('dashboard')}Dashboard</button>`;
   if (state.meta.notificaciones) html += `<button class="nav-item" data-key="notificaciones">${ic('bell')}Notificaciones<span class="pill" id="navBell">0</span></button>`;
+  html += `<button class="nav-item" data-key="cuenta">${ic('user')}Mi cuenta</button>`;
   for (const g of groups) {
     const closed = state.collapsed[g.id] ? ' closed' : '';
     html += `<div class="nav-group${closed}" data-group="${g.id}">
@@ -254,6 +302,14 @@ function renderNav() {
       <div class="nav-items">${g.items.map(r => `<button class="nav-item" data-key="${r.key}">${ic(r.icon || 'package')}${esc(r.label)}</button>`).join('')}</div>
     </div>`;
   }
+  const extras = [];
+  if (can('configuracion', 'consultar')) {
+    extras.push(`<button class="nav-item" data-key="empresas">${ic('building')}Empresas clientes</button>`);
+    extras.push(`<button class="nav-item" data-key="auditoria">${ic('shield')}Auditoría</button>`);
+  }
+  const exportables = Object.values(state.meta.resources).some(r => r.exportar);
+  if (exportables) extras.push(`<button class="nav-item" data-key="export-all">${ic('download')}Exportar todos los módulos</button>`);
+  if (extras.length) html += `<div class="nav-title">Reportes y administración</div>${extras.join('')}`;
   $('#nav').innerHTML = html;
   const navBell = $('#navBell'), bellCount = $('#bellCount');
   if (navBell && bellCount) navBell.textContent = bellCount.textContent;
@@ -281,6 +337,12 @@ function navigate(key) {
   $$('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.key === key));
   if (key === 'dashboard') renderDashboard();
   else if (key === 'notificaciones') renderNotifications();
+  else if (key === 'cuenta') renderAccount();
+  else if (key === 'roles') renderRoles();
+  else if (key === 'empresas') renderCompanies();
+  else if (key === 'auditoria') renderAudit();
+  else if (key === 'export-all') exportAll();
+  else if (key.startsWith('empresa/')) renderCompany(+key.split('/')[1]);
   else renderList(key);
 }
 function crumb(parts) {
@@ -358,7 +420,7 @@ function renderList(key) {
       <div><h1>${esc(r.label)}</h1><p>Consulte, registre y administre ${esc(r.label.toLowerCase())}.</p></div>
       <div class="spacer"></div>
       <div class="head-actions">
-        ${r.exportar ? `<button class="btn ghost" id="btnExport">${ic('download')}Exportar CSV</button>` : ''}
+        ${r.exportar ? `<button class="btn ghost" id="btnExport">${ic('download')}Exportar Excel</button>` : ''}
         ${r.crear ? `<button class="btn primary" id="btnNew">${ic('plus')}Registrar</button>` : ''}
       </div>
     </div>
@@ -374,7 +436,7 @@ function renderList(key) {
     renderList._t = setTimeout(loadRows, 300);
   };
   if ($('#btnNew')) $('#btnNew').onclick = () => openForm(key);
-  if ($('#btnExport')) $('#btnExport').onclick = exportCSV;
+  if ($('#btnExport')) $('#btnExport').onclick = () => exportModule(key);
   loadRows();
 }
 async function loadRows() {
@@ -623,39 +685,384 @@ async function renderNotifications() {
   }
 }
 
-/* ---------- Exportar ---------- */
-async function exportCSV() {
-  const key = state.current, r = state.meta.resources[key];
+/* ---------- Exportar (Excel real) ---------- */
+async function downloadFile(url, fallbackName) {
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + state.token }, cache: 'no-store' });
+  if (!res.ok) {
+    let data = {};
+    try { data = await res.json(); } catch { }
+    throw new Error(data.error || 'No se pudo generar el archivo.');
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  const plain = /filename="?([^";]+)"?/i.exec(cd);
+  const name = star ? decodeURIComponent(star[1]) : plain ? plain[1] : fallbackName;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  return name;
+}
+async function exportModule(key) {
+  const r = state.meta.resources[key];
+  toast('Generando Excel de ' + r.label + '…');
   try {
-    const d = await api(`/api/r/${key}?limit=5000&q=${encodeURIComponent(state.q)}`);
-    const cols = r.cols.map(x => x[0]);
-    const rows = [r.cols.map(x => x[1]), ...d.items.map(x => cols.map(k => x[k]))];
-    const csv = '\ufeff' + rows.map(line => line.map(s => {
-      s = String(s ?? '');
-      if (/^[=+\-@]/.test(s)) s = "'" + s;
-      return '"' + s.replace(/"/g, '""') + '"';
-    }).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = key + '.csv';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('CSV exportado.');
+    const name = await downloadFile(`/api/export/${key}?q=${encodeURIComponent(state.q || '')}`, `SIGFV_${key}.xlsx`);
+    toast('Excel generado: ' + name);
+  } catch (e) { toast(e.message, true); }
+}
+async function exportAll() {
+  toast('Generando libro con todos los módulos…');
+  try {
+    const name = await downloadFile('/api/export/all', 'SIGFV_todos.xlsx');
+    toast('Libro generado: ' + name);
   } catch (e) { toast(e.message, true); }
 }
 
+/* ---------- Mi cuenta ---------- */
+function renderAccount() {
+  crumb(['Mi cuenta']);
+  const s = JSON.parse(sessionStorage.getItem('sigfv_session') || '{}');
+  const meta = state.meta;
+  const count = (meta.permissions || []).length;
+  $('#view').innerHTML = `
+    <div class="page-head"><div><h1>Mi cuenta</h1><p>Sesión activa y cambio de contraseña del rol.</p></div></div>
+    <div class="dash-grid">
+      <div>
+        <section class="card" style="margin-bottom:14px">
+          <div class="card-head">${ic('user')}<h3>Datos de la sesión</h3></div>
+          <div class="card-body mini-list">
+            <div class="mini-row"><span class="m-ico">${ic('shield')}</span><div class="m-main"><strong>${esc(meta.roles?.[0] || s.rol || '—')}</strong><small>Rol con el que ingresó</small></div></div>
+            <div class="mini-row"><span class="m-ico">${ic('building')}</span><div class="m-main"><strong>${esc(meta.empresa || s.empresa || '—')}</strong><small>Empresa seleccionada</small></div></div>
+            <div class="mini-row"><span class="m-ico">${ic('id-card')}</span><div class="m-main"><strong>${esc(meta.user || '—')}</strong><small>Operador registrado en auditoría</small></div></div>
+            <div class="mini-row"><span class="m-ico">${ic('check')}</span><div class="m-main"><strong>${count} permisos</strong><small>Módulos y acciones autorizadas</small></div></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head">${ic('key')}<h3>Permisos del rol</h3></div>
+          <div class="card-body" style="display:flex;flex-wrap:wrap;gap:6px">
+            ${(meta.permissions || []).slice().sort().map(p => `<span class="tag" style="background:#42464B">${esc(p.replace(':', ' · '))}</span>`).join('') || '<span class="muted">Sin permisos asignados.</span>'}
+          </div>
+        </section>
+      </div>
+      <div>
+        <section class="card">
+          <div class="card-head">${ic('key')}<h3>Cambiar contraseña</h3></div>
+          <div class="card-body">
+            <form id="pwForm">
+              <div class="field"><label for="pwActual">Contraseña actual</label><input class="input" id="pwActual" type="password" autocomplete="current-password" required></div>
+              <div class="field"><label for="pwNueva">Nueva contraseña</label><input class="input" id="pwNueva" type="password" minlength="8" autocomplete="new-password" required></div>
+              <div class="field"><label for="pwRepite">Repetir nueva contraseña</label><input class="input" id="pwRepite" type="password" minlength="8" autocomplete="new-password" required></div>
+              <button class="btn primary full" type="submit">${ic('check')}Actualizar contraseña</button>
+              <p class="muted" style="font-size:11.5px;margin-top:10px">La contraseña es del rol: todos los que ingresen con este rol usarán la nueva clave.</p>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>`;
+  $('#pwForm').onsubmit = async e => {
+    e.preventDefault();
+    const actual = $('#pwActual').value, nueva = $('#pwNueva').value, repite = $('#pwRepite').value;
+    if (nueva !== repite) { toast('Las contraseñas nuevas no coinciden.', true); return; }
+    try {
+      await api('/api/auth/change-password', { method: 'POST', body: { actual, nueva } });
+      e.target.reset();
+      toast('Contraseña actualizada.');
+    } catch (x) { toast(x.message, true); }
+  };
+}
+
+/* ---------- Roles y permisos ---------- */
+function askConfirm(title, text, okLabel = 'Sí, continuar') {
+  return new Promise(resolve => {
+    const dlg = $('#confirmDlg');
+    $('#confirmTitle').textContent = title;
+    $('#confirmText').textContent = text;
+    $('#confirmOk').textContent = okLabel;
+    dlg.showModal();
+    const finish = value => { dlg.close(); resolve(value); };
+    $('#confirmOk').onclick = () => finish(true);
+    $('#confirmCancel').onclick = () => finish(false);
+    dlg.oncancel = () => finish(false);
+  });
+}
+async function renderRoles() {
+  crumb(['Administración', 'Roles y accesos']);
+  const view = $('#view');
+  view.innerHTML = '<div class="table-card"><div class="card-body"><div class="skel" style="width:60%"></div></div></div>';
+  try {
+    const [roles, perms, companies] = await Promise.all([
+      api('/api/admin/roles'),
+      api('/api/admin/permissions'),
+      api('/api/admin/empresas').catch(() => [])
+    ]);
+    state.rolesCache = roles;
+    state.perms = perms;
+    state.companyList = companies;
+    const open = state.meta.resources.roles || {};
+    view.innerHTML = `
+      <div class="page-head"><div><h1>Roles y accesos</h1><p>Cada rol define la contraseña de acceso y los módulos que puede usar.</p></div><div class="spacer"></div>
+      <div class="head-actions">${open.crear || can('usuarios', 'crear') || can('usuarios', 'editar') ? `<button class="btn primary" id="btnNewRole">${ic('plus')}Nuevo rol</button>` : ''}</div></div>
+      <div class="table-card"><div class="table-wrap"><table>
+        <thead><tr><th>Rol</th><th>Empresa</th><th>Descripción</th><th>Acceso</th><th>Permisos</th><th style="text-align:right">Acciones</th></tr></thead>
+        <tbody>${roles.map(r => `<tr data-role="${r.id}">
+          <td><strong>${esc(r.nombre)}</strong></td>
+          <td>${r.empresaId ? esc(r.empresa || '—') : '<span class="muted">Todas las empresas</span>'}</td>
+          <td>${esc(r.descripcion || '—')}</td>
+          <td>${r.tienePassword ? '<span class="tag" style="background:#26865B"><span class="d"></span>Con contraseña</span>' : '<span class="tag" style="background:#A98624"><span class="d"></span>Sin contraseña</span>'}</td>
+          <td>${(r.permisos || []).length} acciones</td>
+          <td><div class="row-actions">
+            ${can('usuarios', 'editar') ? `<button title="Editar" data-edit-role="${r.id}">${ic('edit')}</button>` : ''}
+            ${can('usuarios', 'eliminar') && r.id !== 1 ? `<button class="del" title="Desactivar" data-del-role="${r.id}">${ic('trash')}</button>` : ''}
+          </div></td></tr>`).join('')}</tbody>
+      </table></div></div>`;
+    if ($('#btnNewRole')) $('#btnNewRole').onclick = () => openRoleForm();
+    view.querySelectorAll('[data-edit-role]').forEach(b => b.onclick = () => openRoleForm(+b.dataset.editRole));
+    view.querySelectorAll('[data-del-role]').forEach(b => b.onclick = async () => {
+      const role = roles.find(x => x.id === +b.dataset.delRole);
+      if (await askConfirm('Desactivar rol', `¿Confirma desactivar el rol «${role.nombre}»? Dejará de poder iniciar sesión.`, 'Sí, desactivar')) {
+        try { await api('/api/admin/roles/' + role.id, { method: 'DELETE' }); toast('Rol desactivado.'); renderRoles(); }
+        catch (e) { toast(e.message, true); }
+      }
+    });
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar los roles</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+function openRoleForm(id) {
+  const role = id ? state.rolesCache.find(r => r.id === id) : null;
+  const companies = state.companyList || [];
+  const selected = role ? role.permisos || [] : [];
+  const groups = (state.perms || []).map(g => `
+    <div class="perm-group">
+      <div class="perm-head"><strong>${esc(g.label)}</strong><span class="muted">${esc(g.modulo)}</span></div>
+      <div class="perm-actions">${g.acciones.map(a => `<label class="perm-chip"><input type="checkbox" data-perm="${esc(g.modulo)}:${esc(a)}" ${selected.includes(`${g.modulo}:${a}`) ? 'checked' : ''}>${esc(a)}</label>`).join('')}</div>
+    </div>`).join('');
+  $('#drawerHead').innerHTML = `<div><small>Administración</small><h2>${id ? 'Editar' : 'Nuevo'} rol</h2></div><button class="icon-btn" id="drawerClose" title="Cerrar">${ic('x')}</button>`;
+  $('#drawerBody').innerHTML = `
+    <div class="form-grid">
+      <div class="form-section">Datos del rol</div>
+      <div class="field"><label>Nombre del rol</label><input class="input" id="roleNombre" maxlength="60" required value="${esc(role?.nombre || '')}"></div>
+      <div class="field"><label>Descripción</label><input class="input" id="roleDesc" maxlength="200" value="${esc(role?.descripcion || '')}"></div>
+      <div class="field"><label>Empresa</label><select class="input" id="roleEmpresa"><option value="">Todas las empresas (global)</option>${companies.map(c => `<option value="${c.id}" ${role?.empresaId === c.id ? 'selected' : ''}>${esc(c.razonSocial)}</option>`).join('')}</select></div>
+      <div class="field"><label>Contraseña de acceso ${id ? '<span style="font-weight:400;color:#9aa0a6">(dejar vacío para conservar)</span>' : ''}</label><input class="input" id="rolePassword" type="password" minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+      <div class="field"><label>Color</label><input class="input" id="roleColor" type="color" value="${esc(role?.color || '#42464B')}" style="padding:4px;height:42px"></div>
+      <div class="field"><label>Icono</label><input class="input" id="roleIcono" maxlength="40" value="${esc(role?.icono || 'key')}" placeholder="shield, truck, wrench…"></div>
+      <div class="field"><label><input type="checkbox" id="roleActivo" ${role?.activo === false ? '' : 'checked'}> Rol activo</label></div>
+      <div class="form-section" style="grid-column:1/-1">Módulos y acciones permitidas</div>
+      <div class="perm-grid" style="grid-column:1/-1">${groups || '<span class="muted">Sin permisos disponibles.</span>'}</div>
+    </div>`;
+  $('#drawerFoot').innerHTML = `<button type="button" class="btn ghost" id="btnCancel">Cancelar</button><span class="spacer"></span><button type="submit" class="btn primary" id="btnSaveRole">${ic('check')}Guardar rol</button>`;
+  openDrawer();
+  $('#drawerClose').onclick = () => closeDrawer(true);
+  $('#btnCancel').onclick = () => closeDrawer(true);
+  $('#drawerForm').onsubmit = async e => {
+    e.preventDefault();
+    const permisos = $$('#drawerBody [data-perm]').filter(x => x.checked).map(x => x.dataset.perm);
+    const body = {
+      nombre: $('#roleNombre').value.trim(),
+      descripcion: $('#roleDesc').value.trim() || null,
+      empresaId: $('#roleEmpresa').value ? +$('#roleEmpresa').value : null,
+      password: $('#rolePassword').value || null,
+      color: $('#roleColor').value,
+      icono: $('#roleIcono').value.trim() || null,
+      activo: $('#roleActivo').checked,
+      permisos
+    };
+    try {
+      await api(id ? '/api/admin/roles/' + id : '/api/admin/roles', { method: id ? 'PUT' : 'POST', body });
+      closeDrawer(true);
+      toast(id ? 'Rol actualizado.' : 'Rol creado.');
+      renderRoles();
+    } catch (x) { toast(x.message, true); }
+  };
+}
+
+/* ---------- Empresas clientes ---------- */
+async function renderCompanies() {
+  crumb(['Administración', 'Empresas clientes']);
+  const view = $('#view');
+  view.innerHTML = '<div class="table-card"><div class="card-body"><div class="skel" style="width:60%"></div></div></div>';
+  try {
+    const companies = await api('/api/admin/empresas');
+    state.companyList = companies;
+    view.innerHTML = `
+      <div class="page-head"><div><h1>Empresas clientes</h1><p>Empresas que contratan el servicio, sus módulos, vehículos, conductores y requerimientos.</p></div><div class="spacer"></div>
+      <div class="head-actions">${can('configuracion', 'crear') ? `<button class="btn primary" id="btnNewCompany">${ic('plus')}Registrar empresa</button>` : ''}</div></div>
+      <div class="table-card"><div class="table-wrap"><table>
+        <thead><tr><th>Empresa</th><th>RUC</th><th>Unidades</th><th>Vehículos</th><th>Conductores</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
+        <tbody>${companies.map(c => `<tr data-company="${c.id}">
+          <td><strong>${esc(c.razonSocial)}</strong></td>
+          <td>${esc(c.ruc || '—')}</td>
+          <td class="num">${c.unidades}</td><td class="num">${c.vehiculos}</td><td class="num">${c.conductores}</td>
+          <td>${c.activo ? '<span class="tag" style="background:#26865B"><span class="d"></span>Activa</span>' : '<span class="tag" style="background:#C64747"><span class="d"></span>Inactiva</span>'}</td>
+          <td><div class="row-actions"><button title="Ver detalle" data-view="${c.id}">${ic('chevron')}</button>
+          ${can('configuracion', 'editar') ? `<button title="Editar" data-edit-company="${c.id}">${ic('edit')}</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="7"><div class="empty"><strong>Sin empresas registradas</strong><span>Registre la primera empresa cliente.</span></div></td></tr>'}</tbody>
+      </table></div></div>`;
+    if ($('#btnNewCompany')) $('#btnNewCompany').onclick = () => openCompanyForm();
+    view.querySelectorAll('[data-view]').forEach(b => b.onclick = e => { e.stopPropagation(); navigate('empresa/' + b.dataset.view); });
+    view.querySelectorAll('[data-edit-company]').forEach(b => b.onclick = e => { e.stopPropagation(); openCompanyForm(+b.dataset.editCompany); });
+    view.querySelectorAll('[data-company]').forEach(tr => tr.onclick = () => navigate('empresa/' + tr.dataset.company));
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar las empresas</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+async function renderCompany(id) {
+  crumb(['Empresas clientes', 'Detalle']);
+  const view = $('#view');
+  view.innerHTML = '<div class="card"><div class="card-body"><div class="skel" style="width:60%"></div></div></div>';
+  try {
+    const d = await api('/api/admin/empresas/' + id);
+    state.companyDetail = d;
+    const e = d.empresa || {};
+    const r = d.resumen || {};
+    const roles = d.roles || [];
+    view.innerHTML = `
+      <div class="page-head">
+        <button class="btn ghost" id="backCompanies">${ic('back')}Volver</button>
+        <div><h1>${esc(e.razon_social || e.razonSocial || 'Empresa')}</h1><p>RUC ${esc(e.ruc || '—')} · ${e.activo === false ? 'Inactiva' : 'Activa'}${e.contacto ? ' · Contacto: ' + esc(e.contacto) : ''}</p></div>
+        <div class="spacer"></div>
+        <div class="head-actions">${can('configuracion', 'editar') ? `<button class="btn primary" id="editCompany">${ic('edit')}Editar empresa</button>` : ''}</div>
+      </div>
+      <div class="kpis">
+        <article class="kpi gold"><div class="k-top"><span>Unidades mineras</span><span class="k-ico">${ic('map')}</span></div><strong>${r.unidades ?? 0}</strong><small>sedes registradas</small></article>
+        <article class="kpi ok"><div class="k-top"><span>Vehículos</span><span class="k-ico">${ic('truck')}</span></div><strong>${r.vehiculos ?? 0}</strong><small>en la flota</small></article>
+        <article class="kpi info"><div class="k-top"><span>Conductores</span><span class="k-ico">${ic('id-card')}</span></div><strong>${r.conductores ?? 0}</strong><small>registrados</small></article>
+        <article class="kpi warn"><div class="k-top"><span>Docs. por vencer</span><span class="k-ico">${ic('file')}</span></div><strong>${r.documentosPorVencer ?? 0}</strong><small>próximos 30 días</small></article>
+      </div>
+      <div class="dash-grid">
+        <div>
+          <section class="card" style="margin-bottom:14px">
+            <div class="card-head">${ic('truck')}<h3>Vehículos</h3><span class="spacer"></span><span class="muted" style="font-size:12px">${(d.vehiculos || []).length} unidades</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Código</th><th>Placa</th><th>Modelo</th><th>Km</th><th>Estado</th></tr></thead><tbody>
+              ${(d.vehiculos || []).map(v => `<tr><td><strong>${esc(v.codigo)}</strong></td><td>${esc(v.placa || '—')}</td><td>${esc(v.modelo || '—')}</td><td class="num">${num(v.km)}</td><td>${badge(v.estado)}</td></tr>`).join('') || '<tr><td colspan="5"><span class="muted">Sin vehículos.</span></td></tr>'}
+            </tbody></table></div>
+          </section>
+          <section class="card">
+            <div class="card-head">${ic('id-card')}<h3>Conductores</h3><span class="spacer"></span><span class="muted" style="font-size:12px">${(d.conductores || []).length} personas</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Documento</th><th>Teléfono</th><th>Unidad</th><th>Estado</th></tr></thead><tbody>
+              ${(d.conductores || []).map(c => `<tr><td><strong>${esc(c.nombre)}</strong></td><td>${esc(c.documento || '—')}</td><td>${esc(c.telefono || '—')}</td><td>${esc(c.unidad || '—')}</td><td>${badge(c.estado)}</td></tr>`).join('') || '<tr><td colspan="5"><span class="muted">Sin conductores.</span></td></tr>'}
+            </tbody></table></div>
+          </section>
+        </div>
+        <div>
+          <section class="card" style="margin-bottom:14px">
+            <div class="card-head">${ic('key')}<h3>Módulos y roles</h3></div>
+            <div class="card-body mini-list">
+              ${roles.map(x => `<div class="mini-row"><span class="m-ico" style="color:${esc(x.color || '#42464B')}">${ic(x.global ? 'shield' : 'key')}</span><div class="m-main"><strong>${esc(x.nombre)}</strong><small>${(x.permisos || []).length} permisos${x.global ? ' · rol global' : ''}${x.tienePassword ? '' : ' · sin contraseña'}</small></div></div>`).join('') || '<span class="muted">Sin roles asignados.</span>'}
+            </div>
+          </section>
+          <section class="card" style="margin-bottom:14px">
+            <div class="card-head">${ic('package')}<h3>Requerimientos</h3></div>
+            <div class="card-body">${(d.requerimientos || []).length ? `<ul style="margin:0;padding-left:18px;font-size:13px;display:grid;gap:6px">${d.requerimientos.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="muted">Sin requerimientos registrados. Use «Editar empresa» y escriba uno por línea.</span>'}</div>
+          </section>
+          <section class="card">
+            <div class="card-head">${ic('map')}<h3>Unidades mineras</h3></div>
+            <div class="card-body mini-list">${(d.unidades || []).map(u => `<div class="mini-row"><span class="m-ico">${ic('map')}</span><div class="m-main"><strong>${esc(u.nombre)}</strong><small>${esc(u.codigo || '')} ${esc(u.ubicacion || '')}</small></div></div>`).join('') || '<span class="muted">Sin unidades.</span>'}</div>
+          </section>
+        </div>
+      </div>`;
+    $('#backCompanies').onclick = () => navigate('empresas');
+    if ($('#editCompany')) $('#editCompany').onclick = () => openCompanyForm(id);
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo cargar la empresa</strong><span>${esc(e.message)}</span><button class="btn primary" id="backCompanies2">Volver</button></div>`;
+    $('#backCompanies2').onclick = () => navigate('empresas');
+  }
+}
+async function openCompanyForm(id) {
+  let company = {};
+  if (id) {
+    try {
+      const d = await api('/api/admin/empresas/' + id);
+      company = d.empresa || {};
+    } catch (e) { toast(e.message, true); return; }
+  }
+  $('#drawerHead').innerHTML = `<div><small>Empresas clientes</small><h2>${id ? 'Editar' : 'Registrar'} empresa</h2></div><button class="icon-btn" id="drawerClose" title="Cerrar">${ic('x')}</button>`;
+  $('#drawerBody').innerHTML = `
+    <div class="form-grid">
+      <div class="form-section">Datos de la empresa</div>
+      <div class="field wide"><label>Razón social <span class="req">*</span></label><input class="input" id="coName" required maxlength="200" value="${esc(company.razon_social || '')}" placeholder="Compañía Minera … S.A.C."></div>
+      <div class="field"><label>RUC</label><input class="input" id="coRuc" maxlength="20" value="${esc(company.ruc || '')}" placeholder="20512345678"></div>
+      <div class="field"><label>Contacto</label><input class="input" id="coContacto" maxlength="120" value="${esc(company.contacto || '')}" placeholder="Nombre del contacto"></div>
+      <div class="field"><label>Teléfono</label><input class="input" id="coTelefono" maxlength="40" value="${esc(company.telefono || '')}"></div>
+      <div class="field"><label>Correo</label><input class="input" id="coCorreo" type="email" maxlength="120" value="${esc(company.correo || '')}"></div>
+      <div class="field wide"><label>Dirección</label><input class="input" id="coDireccion" maxlength="200" value="${esc(company.direccion || '')}"></div>
+      <div class="field wide"><label>Requerimientos y alcance del servicio</label><textarea class="input" id="coNotas" rows="5" placeholder="Un requerimiento por línea&#10;Ej. Control de documentos de conductores&#10;Ej. Reporte mensual de combustible">${esc(company.notas || '')}</textarea><small class="muted" style="font-size:11px">Escriba un requerimiento por línea; se mostrarán en el detalle de la empresa.</small></div>
+      <div class="field"><label><input type="checkbox" id="coActivo" ${company.activo === false ? '' : 'checked'}> Empresa activa</label></div>
+    </div>`;
+  $('#drawerFoot').innerHTML = `<button type="button" class="btn ghost" id="btnCancel">Cancelar</button><span class="spacer"></span><button type="submit" class="btn primary" id="btnSaveCompany">${ic('check')}${id ? 'Guardar cambios' : 'Registrar empresa'}</button>`;
+  openDrawer();
+  $('#drawerClose').onclick = () => closeDrawer(true);
+  $('#btnCancel').onclick = () => closeDrawer(true);
+  $('#drawerForm').onsubmit = async e => {
+    e.preventDefault();
+    const body = {
+      razonSocial: $('#coName').value.trim(),
+      ruc: $('#coRuc').value.trim(),
+      contacto: $('#coContacto').value.trim(),
+      telefono: $('#coTelefono').value.trim(),
+      correo: $('#coCorreo').value.trim(),
+      direccion: $('#coDireccion').value.trim(),
+      notas: $('#coNotas').value,
+      activo: $('#coActivo').checked
+    };
+    try {
+      const saved = await api(id ? '/api/admin/empresas/' + id : '/api/admin/empresas', { method: id ? 'PUT' : 'POST', body });
+      closeDrawer(true);
+      toast(id ? 'Empresa actualizada.' : 'Empresa registrada.');
+      if (id) renderCompany(id); else navigate('empresa/' + saved.id);
+    } catch (x) { toast(x.message, true); }
+  };
+}
+
+/* ---------- Auditoría ---------- */
+async function renderAudit() {
+  crumb(['Administración', 'Auditoría']);
+  const view = $('#view');
+  view.innerHTML = '<div class="table-card"><div class="card-body"><div class="skel" style="width:60%"></div></div></div>';
+  try {
+    const rows = await api('/api/admin/auditoria?limit=200');
+    view.innerHTML = `
+      <div class="page-head"><div><h1>Auditoría</h1><p>Últimos ${rows.length} movimientos registrados por los usuarios y roles.</p></div><div class="spacer"></div>
+      <div class="head-actions"><button class="btn ghost" id="refreshAudit">${ic('refresh')}Actualizar</button></div></div>
+      <div class="table-card"><div class="table-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Registro</th><th>IP</th></tr></thead>
+        <tbody>${rows.map(a => `<tr><td>${fmt(a.fecha)}</td><td>${esc(a.usuario)}</td><td>${badge(a.accion)}</td><td>${esc(a.entidad)}</td><td>#${esc(a.entidad_id || '—')}</td><td>${esc(a.ip || '—')}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty"><strong>Sin movimientos</strong></div></td></tr>'}</tbody>
+      </table></div></div>`;
+    $('#refreshAudit').onclick = renderAudit;
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo cargar la auditoría</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+
 /* ---------- Arranque ---------- */
+$('#empresa').onchange = () => { $('#loginError').textContent = ''; fillRoles(); };
+$('#reloadCtx').onclick = async e => {
+  e.preventDefault();
+  const link = $('#reloadCtx');
+  link.textContent = 'Actualizando…';
+  try { await loadContext(true); toast('Empresas y roles actualizados.'); }
+  catch (x) { $('#loginError').textContent = x.message; }
+  finally { link.textContent = 'Actualizar empresas y roles'; }
+};
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
   const btn = $('#loginBtn'), err = $('#loginError');
   err.textContent = '';
+  if (!$('#empresa').value) { err.textContent = 'Seleccione la empresa.'; return; }
+  if (!$('#rol').value) { err.textContent = 'Seleccione el rol con el que ingresa.'; return; }
   btn.disabled = true;
   btn.innerHTML = '<span class="skel" style="width:16px;height:16px;border-radius:50%"></span>Ingresando…';
   try {
-    await login($('#usuario').value.trim(), $('#password').value);
+    await login(+$('#empresa').value, +$('#rol').value, $('#password').value, $('#operador').value.trim());
     state.meta = await apiRetry('/api/meta');
     renderShell();
     navigate(state.meta.dashboard ? 'dashboard' : Object.keys(state.meta.resources)[0] || '');
+    $('#password').value = '';
   } catch (x) {
     err.textContent = x.message;
   } finally {

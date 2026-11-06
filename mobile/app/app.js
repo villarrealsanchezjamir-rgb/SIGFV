@@ -1,7 +1,7 @@
 'use strict';
 /* SIGFV · app móvil (Capacitor). La URL del backend va grabada en config.js. */
 const API = String(window.SIGFV_API_BASE || 'https://sigfv.onrender.com').replace(/\/+$/, '');
-const APP_VERSION = window.SIGFV_APP_VERSION || '2.1.0';
+const APP_VERSION = window.SIGFV_APP_VERSION || '2.2.0';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -39,6 +39,9 @@ const ICONS = {
   gauge: '<path d="M12 14 8 8"/><path d="M3.3 18a9 9 0 1 1 17.4 0"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   map: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.5 12.5 9-9M16 7l3 3M19 4l2 2"/>',
+  wifi: '<path d="M5 12.6a11 11 0 0 1 14 0M8.5 16a6 6 0 0 1 7 0M12 19.5h.01"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
 };
 const ICON_ALIAS = {
@@ -85,10 +88,94 @@ const badge = v => {
   return `<span class="badge" style="background:${BADGE_COLORS[k] || '#42464B'}"><span class="d"></span>${esc(String(v ?? '').replace(/_/g, ' '))}</span>`;
 };
 const state = {
-  token: sessionStorage.getItem('sigfv_token') || '',
+  token: localStorage.getItem('sigfv_token') || sessionStorage.getItem('sigfv_token') || '',
   meta: null, tab: 'home', stack: [], cats: {}, alerts: [], notifFilter: 'todas',
-  notifCount: 0, online: false, dash: null
+  notifCount: 0, online: false, dash: null, companies: [], contextLoaded: false, pending: 0
 };
+
+/* ---------- Almacenamiento local (IndexedDB) ---------- */
+const DB_NAME = 'sigfv-offline';
+const DB_VERSION = 1;
+let dbPromise = null;
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('Este dispositivo no permite almacenamiento local.')); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'opId' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+async function idbGet(store, key) {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(store, 'readonly').objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch { return null; }
+}
+async function idbPut(store, key, value) {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, 'readwrite');
+      const os = tx.objectStore(store);
+      const req = os.keyPath ? os.put(value) : os.put(value, key);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch { return false; }
+}
+async function idbDel(store, key) {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch { return false; }
+}
+async function idbAll(store) {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(store, 'readonly').objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch { return []; }
+}
+function scopeKey() {
+  const m = state.meta || {};
+  return `${m.rolId || 0}:${m.empresaId || 0}`;
+}
+const cacheKey = (name) => `c:${scopeKey()}:${name}`;
+function newOpId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'op-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+function isOfflineError(e) {
+  return !!(e && (e.offline || /sin conexión|no se pudo conectar|tardó demasiado|failed to fetch|network/i.test(e.message || '')));
+}
+async function updatePending() {
+  const ops = (await idbAll('outbox')).filter(o => o.scope === scopeKey());
+  state.pending = ops.length;
+  if (state.meta) { renderAppbar(); renderTabs(); }
+  const badge = $('#pendingBadge');
+  if (badge) badge.classList.toggle('hidden', !state.pending);
+}
 
 /* ---------- API ---------- */
 async function api(path, opts = {}) {
@@ -109,8 +196,16 @@ async function api(path, opts = {}) {
     state.online = true;
     return data;
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('El servidor tardó demasiado. Intente otra vez.');
-    if (e instanceof TypeError) { state.online = false; throw new Error('Sin conexión con el servidor. Reintentando…'); }
+    if (e.name === 'AbortError') {
+      const err = new Error('El servidor tardó demasiado. Se guardará para sincronizar.');
+      err.offline = true; throw err;
+    }
+    if (e instanceof TypeError) {
+      state.online = false;
+      if (state.meta) renderAppbar();
+      const err = new Error('Sin conexión con el servidor.');
+      err.offline = true; throw err;
+    }
     throw e;
   } finally { clearTimeout(timer); }
 }
@@ -171,10 +266,12 @@ async function ping() {
   } catch { return false; } finally { clearTimeout(timer); }
 }
 async function wake() {
-  for (let i = 1; i <= 8; i++) {
-    bootMsg(i === 1 ? 'Conectando con SIGFV…' : `Despertando el servidor… (${i}/8)`);
+  if (navigator.onLine === false) return false;
+  for (let i = 1; i <= 6; i++) {
+    bootMsg(i === 1 ? 'Conectando con SIGFV…' : `Despertando el servidor… (${i}/6)`);
     if (await ping()) { state.online = true; return true; }
-    if (i < 8) await sleep(2400);
+    if (navigator.onLine === false) return false;
+    if (i < 6) await sleep(2200);
   }
   return false;
 }
@@ -184,37 +281,108 @@ async function start() {
   $('#app').classList.add('hidden');
   $('#bootSpin').classList.remove('hidden');
   $('#bootActions').classList.add('hidden');
+  state.token = localStorage.getItem('sigfv_token') || sessionStorage.getItem('sigfv_token') || state.token;
+  const cachedMeta = await idbGet('cache', 'meta');
   const ok = await wake();
-  if (!ok) { showBootError('No se pudo conectar. Revise su conexión a internet.'); return; }
-  if (!state.token) { showLogin(); return; }
+  state.online = ok;
+  if (!ok) {
+    if (state.token && cachedMeta) {
+      state.meta = cachedMeta;
+      showApp();
+      renderTab('home');
+      toast('Modo sin conexión: usando datos guardados.', true);
+      updatePending();
+      return;
+    }
+    showBootError('Sin conexión. Conéctese una vez para habilitar el modo offline.');
+    return;
+  }
+  if (!state.token) {
+    await loadContext();
+    showLogin();
+    return;
+  }
   try {
     state.meta = await apiRetry('/meta');
+    await idbPut('cache', 'meta', state.meta);
     showApp();
     renderTab('home');
+    updatePending();
+    syncOutbox();
+    prefetchAll();
   } catch (e) {
     if (e.message.includes('sesión')) return;
-    showLogin();
-    $('#loginError').textContent = e.message;
+    if (cachedMeta) {
+      state.meta = cachedMeta;
+      showApp();
+      renderTab('home');
+      toast('Trabajando con datos guardados.', true);
+      updatePending();
+    } else {
+      await loadContext();
+      showLogin();
+      $('#loginError').textContent = e.message;
+    }
   }
+}
+async function loadContext(force = false) {
+  if (state.contextLoaded && !force) return;
+  const cached = await idbGet('cache', 'authContext');
+  if (navigator.onLine === false && cached) {
+    state.companies = cached;
+    state.contextLoaded = true;
+  } else {
+    try {
+      const ctx = await api('/auth/context', { timeout: 35000 });
+      state.companies = ctx.empresas || [];
+      state.contextLoaded = true;
+      await idbPut('cache', 'authContext', state.companies);
+    } catch (e) {
+      if (!state.companies.length) state.companies = cached || [];
+      if (!state.companies.length) throw e;
+    }
+  }
+  const sel = $('#empresa');
+  if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">Seleccione su empresa…</option>' + state.companies
+    .map(c => `<option value="${c.id}">${esc(c.razonSocial)}${c.id === 0 ? ' · acceso global' : ''}</option>`).join('');
+  if (keep && state.companies.some(c => String(c.id) === keep)) { sel.value = keep; fillRoles(); }
+  else { $('#rol').innerHTML = '<option value="">Seleccione una empresa</option>'; $('#rol').disabled = true; }
+}
+function fillRoles() {
+  const company = state.companies.find(c => String(c.id) === $('#empresa').value);
+  const sel = $('#rol');
+  if (!company) {
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Seleccione una empresa</option>';
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = '<option value="">Seleccione su rol…</option>' + company.roles
+    .map(r => `<option value="${r.rolId}">${esc(r.nombre)}${r.descripcion ? ' · ' + esc(r.descripcion) : ''}</option>`).join('');
 }
 function showLogin() {
   $('#boot').classList.add('hidden');
   $('#app').classList.add('hidden');
   $('#login').classList.remove('hidden');
-  setTimeout(() => $('#usuario').focus(), 120);
+  const note = $('#offlineNote');
+  if (note) note.classList.toggle('hidden', navigator.onLine !== false);
+  setTimeout(() => $('#empresa').focus(), 120);
 }
 function showApp() {
   $('#boot').classList.add('hidden');
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   renderTabs();
-  renderBell();
+  renderAppbar();
 }
 function logout(silent = false) {
+  localStorage.removeItem('sigfv_token');
   sessionStorage.removeItem('sigfv_token');
   state.token = ''; state.meta = null; state.stack = []; state.dash = null;
   closeSub(true);
-  showLogin();
+  loadContext().then(showLogin).catch(showLogin);
   if (!silent) toast('Sesión cerrada.');
 }
 
@@ -225,15 +393,19 @@ function renderTabs() {
 }
 function renderAppbar() {
   const name = state.meta.user || 'Usuario';
+  const online = state.online || navigator.onLine;
   $('#appbar').innerHTML = `
     <span class="mark">SF</span>
-    <div class="brandtxt"><strong>SIGFV</strong><small>Gestión de flota</small></div>
+    <div class="brandtxt"><strong>SIGFV</strong><small>${esc(state.meta.empresa || 'Gestión de flota')}</small></div>
     <span class="grow"></span>
-    <span class="dot" title="Servidor en línea"></span>
+    ${state.pending ? `<button id="pendingBtn" class="pending-chip" title="Cambios pendientes de sincronizar">${ic('refresh', 'sm')}<span>${state.pending}</span></button>` : ''}
+    <span class="dot" style="background:${online ? 'var(--ok)' : 'var(--warn)'};box-shadow:0 0 0 3px ${online ? '#26865b33' : '#a9862433'}" title="${online ? 'En línea' : 'Sin conexión'}"></span>
     <button id="bellBtn" aria-label="Alertas" style="position:relative">${ic('bell')}${state.notifCount ? '<span style="position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:#C64747;border:1.5px solid #171717"></span>' : ''}</button>
     <button id="avatarBtn" aria-label="Perfil"><span class="avatar">${esc(initials(name))}</span></button>`;
   $('#bellBtn').onclick = () => renderTab('alerts');
   $('#avatarBtn').onclick = () => renderTab('profile');
+  const pb = $('#pendingBtn');
+  if (pb) pb.onclick = () => syncOutbox(true);
 }
 function renderBell() { renderAppbar(); }
 function renderTab(tab) {
@@ -287,7 +459,17 @@ async function renderHome() {
   $('#homeRefresh').onclick = () => { state.dash = null; renderHome(); };
   renderQuick();
   try {
-    const d = state.dash || await apiRetry('/dashboard');
+    let d = state.dash;
+    if (!d) {
+      try {
+        d = await apiRetry('/dashboard');
+        await idbPut('cache', cacheKey('dash'), d);
+      } catch (e) {
+        d = await idbGet('cache', cacheKey('dash'));
+        if (!d) throw e;
+        toast('Panel sin conexión: datos guardados.', true);
+      }
+    }
     state.dash = d;
     const k = d.k || {};
     $('#homeKpis').innerHTML = KPI_DEFS.map(([key, label, icon, tone]) => `
@@ -317,16 +499,24 @@ async function loadNotifCount() {
     const n = await api('/notificaciones');
     state.alerts = n;
     state.notifCount = n.length;
+    await idbPut('cache', cacheKey('alerts'), n);
     renderAppbar();
     renderTabs();
-  } catch { }
+  } catch {
+    const cached = await idbGet('cache', cacheKey('alerts'));
+    if (cached) { state.alerts = cached; state.notifCount = cached.length; renderAppbar(); renderTabs(); }
+  }
 }
 
 /* ---------- Módulos ---------- */
 function renderModules() {
   const v = $('#view');
   const gs = groups();
+  const banner = state.pending
+    ? `<button class="offline-banner" id="syncBanner">${ic('refresh', 'sm')}<span><strong>${state.pending} cambio(s) sin sincronizar</strong><small>Tocar para sincronizar con el servidor</small></span>${ic('chevron', 'sm')}</button>`
+    : (!state.online ? `<div class="offline-banner static">${ic('info', 'sm')}<span><strong>Sin conexión</strong><small>Puede consultar y registrar; se sincronizará al volver internet.</small></span></div>` : '');
   v.innerHTML = `
+    ${banner}
     <div class="search-wrap">${ic('search')}<input id="modSearch" placeholder="Buscar módulo…" autocomplete="off"></div>
     <div id="modList">${gs.map(g => {
       const isAdmin = g.id === 'administracion';
@@ -350,6 +540,7 @@ function renderModules() {
     });
   };
   $$('#modList [data-key]').forEach(b => b.onclick = () => openList(b.dataset.key));
+  const sb = $('#syncBanner'); if (sb) sb.onclick = () => syncOutbox(true);
 }
 
 /* ---------- Navegación de subpantallas ---------- */
@@ -409,8 +600,10 @@ function subBar(title, opts = {}) {
   $('#subBar').innerHTML = `
     <button id="subBack" aria-label="Volver">${ic('back')}</button>
     <span class="subtitle">${esc(title)}</span>
+    ${opts.exportBtn ? `<button id="subExport" aria-label="Exportar Excel">${ic('download')}</button>` : ''}
     ${opts.newBtn ? `<button id="subNew" aria-label="Registrar">${ic('plus')}</button>` : '<span style="min-width:40px"></span>'}`;
   $('#subBack').onclick = subBack;
+  if (opts.exportBtn) $('#subExport').onclick = opts.onExport;
   if (opts.newBtn) $('#subNew').onclick = () => openForm(opts.key, null);
 }
 function recordCard(r, x) {
@@ -432,12 +625,14 @@ function recordCard(r, x) {
 function renderListScreen(key) {
   const r = state.meta.resources[key];
   if (!r) { closeSub(true); return; }
-  subBar(r.label, { newBtn: !!r.crear, key });
+  subBar(r.label, { newBtn: !!r.crear, key, exportBtn: !!r.exportar, onExport: () => exportModule(key) });
   const body = $('#subBody');
   $('#subFoot').innerHTML = '';
-  body.innerHTML = `<div class="search-wrap">${ic('search')}<input id="recSearch" value="${esc(sub.q)}" placeholder="Buscar en ${esc(r.label.toLowerCase())}…" autocomplete="off"></div>
+  body.innerHTML = `${state.pending ? `<button class="offline-banner" id="syncBannerList">${ic('refresh', 'sm')}<span><strong>${state.pending} cambio(s) sin sincronizar</strong><small>Tocar para sincronizar</small></span>${ic('chevron', 'sm')}</button>` : ''}
+    <div class="search-wrap">${ic('search')}<input id="recSearch" value="${esc(sub.q)}" placeholder="Buscar en ${esc(r.label.toLowerCase())}…" autocomplete="off"></div>
     <div class="list-head"><span class="count" id="recCount"></span></div>
     <div id="recList"></div>`;
+  const sb = $('#syncBannerList'); if (sb) sb.onclick = () => syncOutbox(true);
   const input = $('#recSearch');
   input.oninput = e => {
     sub.q = e.target.value.trim();
@@ -456,7 +651,7 @@ async function loadRecords(reset) {
   if (reset) list.innerHTML = Array.from({ length: 5 }, () => '<div class="skel" style="height:74px;margin-bottom:9px"></div>').join('');
   const oldBtn = $('#loadMore'); if (oldBtn) oldBtn.remove();
   try {
-    const d = await apiRetry(`/r/${key}?pagina=${sub.page}&limit=${sub.limit}&q=${encodeURIComponent(sub.q)}`);
+    const d = await fetchRecords(key);
     if (token !== sub.req || sub.view !== 'list' || sub.key !== key) return;
     sub.total = d.total;
     sub.items = reset ? d.items : sub.items.concat(d.items);
@@ -483,10 +678,35 @@ async function loadRecords(reset) {
   }
 }
 
+async function fetchRecords(key) {
+  try {
+    const d = await apiRetry(`/r/${key}?pagina=${sub.page}&limit=${sub.limit}&q=${encodeURIComponent(sub.q)}`);
+    if (sub.page === 1 && !sub.q) await idbPut('cache', cacheKey('list:' + key), d.items || []);
+    return d;
+  } catch (e) {
+    const cached = (await idbGet('cache', cacheKey('list:' + key))) || [];
+    if (!cached.length) throw e;
+    const q = sub.q.toLowerCase();
+    const filtered = q ? cached.filter(x => Object.values(x).some(v => String(v ?? '').toLowerCase().includes(q))) : cached;
+    const start = (sub.page - 1) * sub.limit;
+    if (sub.page === 1) toast('Listado sin conexión: datos guardados.', true);
+    return { total: filtered.length, items: filtered.slice(start, start + sub.limit), offline: true };
+  }
+}
+
 /* ---------- Formulario ---------- */
 async function getCat(name) {
-  if (!state.cats[name]) state.cats[name] = await api(`/cat/${name}`);
-  return state.cats[name];
+  if (state.cats[name]) return state.cats[name];
+  try {
+    const list = await api(`/cat/${name}`);
+    state.cats[name] = list;
+    await idbPut('cache', cacheKey('cat:' + name), list);
+    return list;
+  } catch (e) {
+    const cached = await idbGet('cache', cacheKey('cat:' + name));
+    if (cached) { state.cats[name] = cached; return cached; }
+    return [];
+  }
 }
 function dtLocal(val) {
   if (!val) return '';
@@ -529,7 +749,21 @@ async function renderFormScreen(key, id) {
       pairs.forEach(([n, v]) => { cats[n] = v; });
     }
     if (token !== sub.req) return;
-    const item = id ? await api(`/r/${key}/${id}`) : {};
+    let item = {};
+    if (id) {
+      try {
+        item = await api(`/r/${key}/${id}`);
+        await idbPut('cache', cacheKey('detail:' + key + ':' + id), item);
+      } catch (e) {
+        item = await idbGet('cache', cacheKey('detail:' + key + ':' + id));
+        if (!item) {
+          const cachedList = (await idbGet('cache', cacheKey('list:' + key))) || [];
+          item = cachedList.find(x => x.id === id);
+        }
+        if (!item) throw e;
+        toast('Registro sin conexión: datos guardados.', true);
+      }
+    }
     if (token !== sub.req) return;
     state.cats = cats;
     const fields = r.fields.map(f => {
@@ -564,6 +798,63 @@ async function renderFormScreen(key, id) {
     const b = $('#retryForm'); if (b) b.onclick = () => renderFormScreen(key, id);
   }
 }
+async function applyLocalRecord(key, method, id, body) {
+  const name = cacheKey('list:' + key);
+  const list = (await idbGet('cache', name)) || [];
+  if (method === 'POST') {
+    list.unshift({ id, ...body, __pending: 'create' });
+  } else if (method === 'PUT') {
+    const i = list.findIndex(x => x.id === id);
+    if (i >= 0) list[i] = { ...list[i], ...body, __pending: 'update' };
+  } else if (method === 'DELETE') {
+    const i = list.findIndex(x => x.id === id);
+    if (i >= 0) list.splice(i, 1);
+  }
+  await idbPut('cache', name, list);
+}
+async function queueChange(method, resource, id, body) {
+  if (method === 'POST') {
+    const localId = -Date.now();
+    const op = { opId: newOpId(), scope: scopeKey(), method: 'POST', resource, id: null, localId, body, createdAt: Date.now(), tries: 0, error: null };
+    await idbPut('outbox', op.opId, op);
+    await applyLocalRecord(resource, 'POST', localId, body);
+    return localId;
+  }
+  if (id && id < 0) {
+    const ops = (await idbAll('outbox')).filter(o => o.scope === scopeKey());
+    const op = ops.find(o => o.method === 'POST' && o.resource === resource && o.localId === id);
+    if (op) {
+      if (method === 'DELETE') {
+        await idbDel('outbox', op.opId);
+        await applyLocalRecord(resource, 'DELETE', id);
+      } else {
+        op.body = body;
+        await idbPut('outbox', op.opId, op);
+        await applyLocalRecord(resource, 'PUT', id, body);
+      }
+      return id;
+    }
+  }
+  const op = { opId: newOpId(), scope: scopeKey(), method, resource, id, body: body || null, createdAt: Date.now(), tries: 0, error: null };
+  await idbPut('outbox', op.opId, op);
+  await applyLocalRecord(resource, method, id, body);
+  return id;
+}
+async function replaceLocalId(resource, localId, realId) {
+  const name = cacheKey('list:' + resource);
+  const list = (await idbGet('cache', name)) || [];
+  const i = list.findIndex(x => x.id === localId);
+  if (i >= 0) {
+    list[i] = { ...list[i], id: realId };
+    delete list[i].__pending;
+    await idbPut('cache', name, list);
+  }
+  const detail = await idbGet('cache', cacheKey('detail:' + resource + ':' + localId));
+  if (detail) {
+    await idbPut('cache', cacheKey('detail:' + resource + ':' + realId), { ...detail, id: realId });
+    await idbDel('cache', cacheKey('detail:' + resource + ':' + localId));
+  }
+}
 async function saveForm(key, id) {
   const form = $('#subForm');
   if (!form || !form.reportValidity()) return;
@@ -571,29 +862,164 @@ async function saveForm(key, id) {
   new FormData(form).forEach((v, k) => { body[k] = v; });
   const btn = $('#btnSave');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-  try {
-    await api(id ? `/r/${key}/${id}` : `/r/${key}`, { method: id ? 'PUT' : 'POST', body });
+  const finish = () => {
     state.cats = {};
     sub.dirty = false;
-    toast(id ? 'Cambios guardados.' : 'Registro creado.');
     if (sub.backToList) {
       sub.view = 'list'; sub.page = 1; sub.items = []; sub.q = '';
       renderListScreen(key);
     } else closeSub(true);
+  };
+  try {
+    if (navigator.onLine === false) throw Object.assign(new Error('Sin conexión'), { offline: true });
+    await api(id ? `/r/${key}/${id}` : `/r/${key}`, { method: id ? 'PUT' : 'POST', body });
+    if (id) await idbDel('cache', cacheKey('detail:' + key + ':' + id));
+    toast(id ? 'Cambios guardados.' : 'Registro creado.');
+    finish();
+    syncOutbox();
   } catch (e) {
+    if (!isOfflineError(e)) {
+      toast(e.message, true);
+      if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 'sm') + (id ? 'Guardar' : 'Registrar'); }
+      return;
+    }
+    try {
+      await queueChange(id ? 'PUT' : 'POST', key, id || null, body);
+      state.online = false;
+      updatePending();
+      toast(id ? 'Cambios guardados sin conexión.' : 'Registro guardado sin conexión.');
+      finish();
+    } catch (x) {
+      toast('No se pudo guardar: ' + x.message, true);
+    }
+  } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 'sm') + (id ? 'Guardar' : 'Registrar'); }
-    toast(e.message, true);
   }
 }
 function deleteRecord(key, id) {
   if (!confirm('¿Confirma que desea eliminar este registro? Esta acción lo dará de baja.')) return;
-  api(`/r/${key}/${id}`, { method: 'DELETE' }).then(() => {
+  const finish = () => {
     state.cats = {};
     sub.dirty = false;
-    toast('Registro eliminado.');
     if (sub.backToList) { sub.view = 'list'; sub.page = 1; sub.items = []; renderListScreen(key); }
     else closeSub(true);
-  }).catch(e => toast(e.message, true));
+  };
+  const offline = async () => {
+    await queueChange('DELETE', key, id, null);
+    state.online = false;
+    updatePending();
+    toast('Eliminado sin conexión. Se sincronizará al volver internet.');
+    finish();
+  };
+  if (navigator.onLine === false) { offline().catch(e => toast(e.message, true)); return; }
+  api(`/r/${key}/${id}`, { method: 'DELETE' }).then(() => {
+    toast('Registro eliminado.');
+    finish();
+    syncOutbox();
+  }).catch(e => {
+    if (isOfflineError(e)) offline().catch(x => toast(x.message, true));
+    else toast(e.message, true);
+  });
+}
+
+/* ---------- Sincronización ---------- */
+let syncing = false;
+async function syncOutbox(manual = false) {
+  if (syncing) return { ok: false };
+  const scope = scopeKey();
+  const all = await idbAll('outbox');
+  const ops = all.filter(o => o.scope === scope).sort((a, b) => a.createdAt - b.createdAt);
+  if (!ops.length) {
+    state.pending = 0;
+    if (state.meta) renderAppbar();
+    if (manual) toast('No hay cambios pendientes.');
+    return { ok: true, applied: 0 };
+  }
+  if (navigator.onLine === false) {
+    if (manual) toast('Sin conexión: se sincronizará cuando vuelva internet.', true);
+    return { ok: false };
+  }
+  syncing = true;
+  try {
+    const batch = ops.slice(0, 100);
+    const res = await api('/sync', {
+      method: 'POST', timeout: 70000,
+      body: { ops: batch.map(o => ({ opId: o.opId, method: o.method, resource: o.resource, id: o.id && o.id > 0 ? o.id : null, body: o.body })) }
+    });
+    const results = res.results || [];
+    const byId = Object.fromEntries(batch.map(o => [o.opId, o]));
+    let applied = 0;
+    for (const r of results) {
+      const op = byId[r.opId];
+      if (!op) continue;
+      if (r.ok) {
+        applied++;
+        await idbDel('outbox', op.opId);
+        if (op.method === 'POST' && op.localId && r.id) await replaceLocalId(op.resource, op.localId, r.id);
+      } else {
+        op.tries = (op.tries || 0) + 1;
+        op.error = r.error || 'No se pudo aplicar en el servidor.';
+        await idbPut('outbox', op.opId, op);
+      }
+    }
+    await updatePending();
+    if (applied) {
+      state.dash = null;
+      if (sub.view === 'list' && sub.key) loadRecords(true);
+    }
+    if (manual) {
+      const failed = results.filter(r => !r.ok).length;
+      toast(applied ? `Sincronizados ${applied} cambio(s).` : 'Aún no se pudo sincronizar.', !applied || failed > 0);
+    }
+    return { ok: true, applied };
+  } catch (e) {
+    if (manual) toast(e.message, true);
+    return { ok: false };
+  } finally {
+    syncing = false;
+  }
+}
+async function prefetchAll() {
+  try {
+    for (const key of Object.keys(state.meta.resources)) {
+      const r = state.meta.resources[key];
+      if (!r || r.custom) continue;
+      try {
+        const d = await api(`/r/${key}?pagina=1&limit=300`);
+        await idbPut('cache', cacheKey('list:' + key), d.items || []);
+      } catch { }
+    }
+    const catNames = new Set();
+    for (const r of Object.values(state.meta.resources)) {
+      (r.fields || []).forEach(f => { if (f.cat) catNames.add(f.cat); });
+    }
+    for (const name of catNames) {
+      try {
+        const list = await api(`/cat/${name}`);
+        await idbPut('cache', cacheKey('cat:' + name), list);
+      } catch { }
+    }
+  } catch { }
+}
+
+/* ---------- Exportar Excel ---------- */
+function exportModule(key) {
+  if (!state.token) { toast('Inicie sesión para exportar.', true); return; }
+  const url = `${API}/api/export/${encodeURIComponent(key)}?token=${encodeURIComponent(state.token)}`;
+  toast('Generando Excel…');
+  try {
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch { window.location.href = url; }
+}
+function exportAll() {
+  if (!state.token) { toast('Inicie sesión para exportar.', true); return; }
+  const url = `${API}/api/export/all?token=${encodeURIComponent(state.token)}`;
+  toast('Generando libro completo…');
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 /* ---------- Alertas ---------- */
@@ -656,6 +1082,9 @@ function renderProfile() {
   const name = state.meta.user || 'Usuario';
   const roles = state.meta.roles || [];
   const mods = Object.keys(state.meta.resources).length;
+  const empresa = state.meta.empresa || 'Todas las empresas';
+  const online = state.online || navigator.onLine;
+  const hasExport = Object.values(state.meta.resources || {}).some(r => r.exportar);
   v.innerHTML = `
     <div class="profile-top">
       <div class="big">${esc(initials(name))}</div>
@@ -666,23 +1095,76 @@ function renderProfile() {
     <div class="section">
       <div class="section-head"><h2>Cuenta y sistema</h2></div>
       <div class="card">
-        <div class="info-row">${ic('user')}<span class="lbl"><strong>Usuario</strong><small>Cuenta corporativa</small></span><span class="val">${esc(name)}</span></div>
+        <div class="info-row">${ic('building')}<span class="lbl"><strong>Empresa</strong><small>Cliente del servicio</small></span><span class="val">${esc(empresa)}</span></div>
+        <div class="info-row">${ic('shield')}<span class="lbl"><strong>Rol</strong><small>Acceso actual</small></span><span class="val">${esc(roles[0] || '—')}</span></div>
+        <div class="info-row">${ic('user')}<span class="lbl"><strong>Operador</strong><small>Nombre registrado en auditoría</small></span><span class="val">${esc(name)}</span></div>
         <div class="info-row">${ic('gauge')}<span class="lbl"><strong>Módulos disponibles</strong><small>Según sus permisos</small></span><span class="val">${mods}</span></div>
-        <div class="info-row">${ic('shield')}<span class="lbl"><strong>Servidor</strong><small>Conexión cifrada</small></span><span class="val"><span class="online"><span class="p"></span>Operativo</span></span></div>
+        <div class="info-row">${ic('refresh')}<span class="lbl"><strong>Cambios pendientes</strong><small>Operaciones por sincronizar</small></span><span class="val" id="profilePending">${state.pending}</span></div>
+        <div class="info-row">${ic('wifi')}<span class="lbl"><strong>Servidor</strong><small>${online ? 'Conexión cifrada' : 'Sin conexión'}</small></span><span class="val">${online ? '<span class="online"><span class="p"></span>Operativo</span>' : '<span style="color:var(--warn);font-weight:600">Guardado local</span>'}</span></div>
         <div class="info-row">${ic('info')}<span class="lbl"><strong>Versión</strong><small>Aplicación móvil</small></span><span class="val">${esc(APP_VERSION)}</span></div>
       </div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h2>Sincronización y reportes</h2></div>
+      <button class="btn ghost full" id="btnSync">${ic('refresh', 'sm')} Sincronizar ahora${state.pending ? ` (${state.pending})` : ''}</button>
+      ${hasExport ? `<button class="btn ghost full" id="btnExportAll" style="margin-top:10px">${ic('download', 'sm')} Exportar todos los módulos</button>` : ''}
+    </div>
+    <div class="section">
+      <div class="section-head"><h2>Seguridad</h2></div>
+      <button class="btn ghost full" id="btnPwToggle">${ic('key', 'sm')} Cambiar contraseña del rol</button>
+      <form id="pwForm" class="card hidden" style="margin-top:10px;padding:14px">
+        <div class="field"><label for="pwActual">Contraseña actual</label><input class="input" id="pwActual" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="pwNueva">Nueva contraseña</label><input class="input" id="pwNueva" type="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="field"><label for="pwRepite">Repetir nueva contraseña</label><input class="input" id="pwRepite" type="password" minlength="8" autocomplete="new-password" required></div>
+        <button class="btn primary full" type="submit">${ic('check', 'sm')} Actualizar contraseña</button>
+        <p class="muted" style="font-size:11.5px;margin-top:10px;line-height:1.4">La contraseña es del rol: todos los que ingresen con este rol usarán la nueva clave.</p>
+      </form>
     </div>
     <div class="section">
       <div class="section-head"><h2>Sesión</h2></div>
       <button class="btn danger full" id="btnLogout">${ic('logout', 'sm')} Cerrar sesión</button>
       <p class="muted" style="font-size:11.5px;text-align:center;margin-top:12px;line-height:1.4">SIGFV · Sistema Integral de Gestión de Flota Vehicular</p>
     </div>`;
+  $('#btnSync').onclick = async () => {
+    const r2 = await syncOutbox(true);
+    const p = $('#profilePending'); if (p) p.textContent = state.pending;
+    if (r2 && r2.ok) renderProfile();
+  };
+  if ($('#btnExportAll')) $('#btnExportAll').onclick = exportAll;
+  $('#btnPwToggle').onclick = () => $('#pwForm').classList.toggle('hidden');
+  $('#pwForm').onsubmit = async e => {
+    e.preventDefault();
+    const actual = $('#pwActual').value, nueva = $('#pwNueva').value, repite = $('#pwRepite').value;
+    if (nueva !== repite) { toast('Las contraseñas nuevas no coinciden.', true); return; }
+    try {
+      await api('/auth/change-password', { method: 'POST', body: { actual, nueva } });
+      e.target.reset();
+      $('#pwForm').classList.add('hidden');
+      toast('Contraseña actualizada.');
+    } catch (x) { toast(x.message, true); }
+  };
   $('#btnLogout').onclick = () => { if (confirm('¿Desea cerrar la sesión?')) logout(); };
 }
 
 /* ---------- Eventos generales ---------- */
-window.addEventListener('online', () => { state.online = true; if ($('#app').classList.contains('hidden') && !$('#login').classList.contains('hidden')) return; });
-window.addEventListener('offline', () => { state.online = false; toast('Sin conexión a internet.', true); });
+window.addEventListener('online', async () => {
+  state.online = true;
+  if (!state.token) return;
+  if (state.meta) { renderAppbar(); renderTabs(); }
+  toast('Conexión restablecida. Sincronizando…');
+  const r2 = await syncOutbox();
+  if (r2 && r2.applied && state.meta) {
+    state.dash = null;
+    if (state.tab === 'home') renderTab('home');
+    if (state.tab === 'modules') renderTab('modules');
+  }
+  if (state.meta) prefetchAll();
+});
+window.addEventListener('offline', () => {
+  state.online = false;
+  if (state.meta) renderAppbar();
+  toast('Sin conexión: los cambios se guardarán en el dispositivo.', true);
+});
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('#sub').classList.contains('open')) subBack();
 });
@@ -692,16 +1174,29 @@ $('#loginForm').onsubmit = async e => {
   e.preventDefault();
   const btn = $('#loginBtn'), err = $('#loginError');
   err.textContent = '';
+  if (!$('#empresa').value) { err.textContent = 'Seleccione la empresa.'; return; }
+  if (!$('#rol').value) { err.textContent = 'Seleccione el rol con el que ingresa.'; return; }
   btn.disabled = true; btn.textContent = 'Ingresando…';
   try {
-    const usuario = $('#usuario').value.trim();
+    const empresaId = +$('#empresa').value;
+    const rolId = +$('#rol').value;
     const password = $('#password').value;
-    const r2 = await api('/auth/login', { method: 'POST', body: { usuario, password } });
+    const operador = $('#operador').value.trim() || null;
+    const r2 = await api('/auth/login', {
+      method: 'POST', timeout: 45000,
+      body: { empresaId, rolId, password, operador }
+    });
     state.token = r2.token;
+    localStorage.setItem('sigfv_token', r2.token);
     sessionStorage.setItem('sigfv_token', r2.token);
     state.meta = await apiRetry('/meta');
+    await idbPut('cache', 'meta', state.meta);
     showApp();
     renderTab('home');
+    updatePending();
+    syncOutbox();
+    prefetchAll();
+    $('#password').value = '';
   } catch (x) {
     err.textContent = x.message;
     if (/servidor|conexión/i.test(x.message)) { await wake(); }
@@ -709,6 +1204,7 @@ $('#loginForm').onsubmit = async e => {
     btn.disabled = false; btn.textContent = 'Ingresar';
   }
 };
+$('#empresa').onchange = () => { $('#loginError').textContent = ''; fillRoles(); };
 $('#togglePw').onclick = () => {
   const p = $('#password');
   const show = p.type === 'password';

@@ -233,3 +233,15 @@ dialog::backdrop{background:#0007}
   .pager .pages{display:none}
 }
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+/* ---------- Roles y permisos (2.2) ---------- */
+.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.perm-group{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fbfbfc}
+.perm-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}
+.perm-head strong{font-size:12.5px}
+.perm-head .muted{font-size:11px}
+.perm-actions{display:flex;flex-wrap:wrap;gap:6px}
+.perm-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:4px 8px;border:1px solid var(--line);border-radius:20px;background:#fff;cursor:pointer;user-select:none}
+.perm-chip input{accent-color:var(--gold-d);margin:0}
+.perm-chip:has(input:checked){border-color:var(--gold);background:#fdf8e9}
+@media(max-width:860px){.perm-grid{grid-template-columns:1fr}}

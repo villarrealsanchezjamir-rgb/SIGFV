@@ -16,3 +16,5 @@ android/*.jks
 dist
 .DS_Store
 node_modules/ 
+api/**/bin/
+api/**/obj/

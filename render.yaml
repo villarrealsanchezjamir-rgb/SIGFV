@@ -18,8 +18,8 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
       - key: JWT_SECRET
         sync: false
       - key: SUPABASE_URL

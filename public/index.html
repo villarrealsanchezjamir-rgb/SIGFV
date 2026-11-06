@@ -33,14 +33,26 @@
     <section class="login-box">
       <form class="login-card" id="loginForm" autocomplete="on">
         <h2>Iniciar sesión</h2>
-        <p class="lead">Acceda con su cuenta corporativa.</p>
+        <p class="lead">Elija la empresa y el rol con el que ingresa.</p>
 
         <div class="field">
-          <label for="usuario">Usuario</label>
-          <input class="input" id="usuario" name="usuario" autocomplete="username" placeholder="usuario.apellido" required autofocus>
+          <label for="empresa">Empresa</label>
+          <select class="input" id="empresa" required autofocus>
+            <option value="">Cargando empresas…</option>
+          </select>
         </div>
         <div class="field">
-          <label for="password">Contraseña</label>
+          <label for="rol">Rol</label>
+          <select class="input" id="rol" required disabled>
+            <option value="">Seleccione una empresa</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="operador">Su nombre <span style="color:#9aa0a6;font-weight:400">(opcional)</span></label>
+          <input class="input" id="operador" name="operador" maxlength="120" autocomplete="name" placeholder="Ej. Juan Pérez">
+        </div>
+        <div class="field">
+          <label for="password">Contraseña del rol</label>
           <div class="pw">
             <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
             <button type="button" id="togglePw" aria-label="Mostrar contraseña"></button>
@@ -49,7 +61,7 @@
 
         <div class="error" id="loginError" role="alert"></div>
         <button class="btn primary full" id="loginBtn" type="submit">Ingresar</button>
-        <p class="login-hint">SIGFV v2.1 · Conexión segura HTTPS</p>
+        <p class="login-hint">SIGFV v2.2 · <a href="#" id="reloadCtx" style="color:inherit">Actualizar empresas y roles</a></p>
       </form>
     </section>
   </div>

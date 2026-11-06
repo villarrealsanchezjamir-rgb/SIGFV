@@ -1,15 +1,15 @@
-{
+﻿{
   "name": "sigfv",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "main": "server.js",
-  "description": "SIGFV · Gestión de flota vehicular sobre Supabase",
+  "description": "SIGFV Â· GestiÃ³n de flota vehicular sobre Supabase",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check db.js && node --check scripts/build-mobile.js && node --check scripts/build-apk-public.js && node --check scripts/healthcheck.js",
+    "check": "node --check scripts/build-mobile.js && node --check scripts/build-apk-public.js && node --check scripts/healthcheck.js",
     "crear-admin": "node scripts/crear-admin.js",
     "db:setup": "node scripts/setup-db.js",
     "mobile:build": "node scripts/build-mobile.js",
