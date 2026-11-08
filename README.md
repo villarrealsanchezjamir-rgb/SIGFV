@@ -121,7 +121,7 @@ Dashboard con datos reales · Vehículos · Conductores y licencias · Asignacio
 
 ### 6.1 Instalar
 
-1. Copie la APK **`SIGFV-2.3.0-release.apk`** (raíz del proyecto) al teléfono (cable, WhatsApp, Drive, etc.).
+1. Copie la APK **`dist/SIGFV-2.3.0-release.apk`** al teléfono (cable, WhatsApp, Drive, etc.).
 2. Permita **Instalar aplicaciones de origen desconocido** para el explorador/gestor de archivos.
 3. Abra el APK e instale.
 
@@ -185,7 +185,7 @@ Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 ```
 SIGFV/
 ├─ api/                      Backend .NET 10 en capas (Domain/Application/Infrastructure/Api)
-├─ SIGFV-2.3.0-release.apk   APK firmada lista para instalar
+├─ dist/SIGFV-2.3.0-release.apk   APK firmada lista para instalar
 ├─ .env                      Credenciales locales (NO compartir)
 ├─ .env.example              Plantilla de variables
 ├─ .env.production.example   Plantilla para VPS
