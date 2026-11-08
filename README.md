@@ -4,13 +4,20 @@ Sistema web + aplicación Android para la gestión de flota vehicular, ahora con
 
 ```
 Web (navegador) ───────┐
-                       ├──► API Express en la nube (HTTPS) ───► Supabase PostgreSQL
+                       ├──► API .NET 10 en capas (HTTPS) ───► Supabase PostgreSQL
 APK Android ───────────┘
 ```
 
 La web y la APK usan **la misma API y la misma base de datos en Supabase**. La app Android puede ejecutarse en cualquier red (Wi-Fi o datos) siempre que el backend esté accesible.
 
 > **Producción / uso real:** no deje el backend dependiendo de una PC. Despliegue el API en la nube con HTTPS; así la web y la APK funcionan desde cualquier red y sin abrir VS Code. Guía completa: **[DEPLOY.md](DEPLOY.md)**.
+
+### Novedades 2.3
+
+- **Modo offline real en la APK:** inicia con los datos guardados aunque no haya internet, permite consultar/registrar/editar/eliminar y sincroniza automáticamente al recuperar la conexión.
+- **Orden operativo de módulos:** flota → conductores → asignaciones → mantenimiento → inspecciones → combustible → documentación → incidentes → administración.
+- **Módulos y responsables:** cada área muestra el rol encargado, tanto en la web como en la APK.
+- **Botón atrás de Android:** retrocede dentro de la app (subpantalla → pestaña → Inicio) y solo sale con doble pulsación en Inicio.
 
 ---
 
@@ -20,11 +27,14 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 - Enums, restricciones, índices, triggers de negocio y funciones adaptados a PostgreSQL.
 - Datos iniciales (estados, tipos, permisos, roles, configuraciones) cargados.
 - Seguridad a nivel de base de datos: **RLS activado** y permisos revocados para `anon`/`authenticated`; solo el backend accede.
-- Backend Express reescrito con `pg` y conexión al **pooler de Supabase**.
-- Login, permisos por módulo/acción, auditoría y CRUD genérico funcionando.
+- **Backend .NET 10 en capas** (`Domain`, `Application`, `Infrastructure`, `Api`) con ADO.NET/Npgsql, JWT y PBKDF2.
+- Login por **empresa + rol + contraseña**, permisos por módulo/acción, auditoría y CRUD genérico.
 - Frontend de escritorio rediseñado (barra lateral agrupada, dashboard, tablas, formulario lateral).
-- App Android con **Capacitor** compilada y firmada, con interfaz exclusiva para celulares.
-- APK release listo para instalar: **`dist/SIGFV-2.1.0.apk`** (URL del backend grabada, no se pide al usuario).
+- App Android con **Capacitor**, interfaz exclusiva para celulares y **modo offline real** (caché IndexedDB + cola de sincronización idempotente).
+- **Excel real (.xlsx)** por módulo y libro completo con todos los módulos permitidos.
+- **Módulos y responsables**: cada área muestra el rol encargado (web y APK).
+- Botón físico **atrás** de Android integrado: navega dentro de la app y solo sale con doble pulsación en Inicio.
+- APK release listo para instalar: **`SIGFV-2.3.0-release.apk`** (URL del backend grabada, no se pide al usuario).
 - Despliegue en la nube preparado (Render, Railway, Fly.io y VPS con Docker + Caddy). Ver **`DEPLOY.md`**.
 - Keep-alive para Render en `.github/workflows/keepalive.yml`.
 
@@ -32,7 +42,8 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 
 ## 2. Requisitos
 
-- Node.js 20 o superior (solo para desarrollo local o para ejecutar el backend en un servidor propio).
+- Node.js 20 o superior (scripts de compilación y APK).
+- .NET SDK 10 para compilar y ejecutar el backend (`api/`).
 - Una cuenta/proyecto de Supabase (ya configurado en este proyecto).
 - Para producción: un servicio siempre activo con HTTPS (Render, Railway, Fly.io o VPS). Ver **[DEPLOY.md](DEPLOY.md)**.
 - Para recompilar el APK: JDK 21 + Android SDK (ver sección 6.3).
@@ -43,21 +54,22 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 
 ```bash
 npm install
-npm start
+dotnet run --project api/src/SIGFV.Api/SIGFV.Api.csproj
 ```
 
 Abra <http://localhost:3000>.
 
-> Esto levanta el backend en la PC y se detiene al cerrar la terminal o VS Code. Para que la web y la APK funcionen sin la PC, siga **[DEPLOY.md](DEPLOY.md)**.
+> El backend .NET sirve la web de `public/` y la API. Se detiene al cerrar la terminal. Para que la web y la APK funcionen sin la PC, siga **[DEPLOY.md](DEPLOY.md)**.
 
 Credenciales iniciales del administrador:
 
 | Campo | Valor |
 |---|---|
-| Usuario | `admin` |
-| Contraseña | `Sigfv2026!` |
+| Empresa | Compañía Minera Andina del Perú S.A.C. (o «Todas las empresas») |
+| Rol | `Administrador` |
+| Contraseña | `SIGFV.Admin.2026` |
 
-> Cambie la contraseña desde **Usuarios → admin → Editar** después del primer ingreso.
+> Cambie la contraseña desde **Mi cuenta → Cambiar contraseña del rol** después del primer ingreso.
 
 Si la base se reinicia o se crea un proyecto Supabase nuevo:
 
@@ -87,7 +99,7 @@ JWT_SECRET=UNA_CADENA_LARGA_Y_ALEATORIA_DE_32_O_MAS_CARACTERES
 ```json
 {
   "ok": true,
-  "version": "2.0.1",
+  "version": "2.3.0",
   "database": "Supabase PostgreSQL",
   "supabase": { "configured": true, "ok": true }
 }
@@ -101,7 +113,7 @@ El esquema está en **`database/01_SIGFV_Supabase.sql`**. El archivo MySQL origi
 
 ## 5. Módulos disponibles
 
-Dashboard con datos reales · Vehículos · Conductores y licencias · Asignaciones (valida estado del vehículo, licencia vigente y cruces de fechas en la base de datos) · Mantenimiento · Documentación y vencimientos · Inspecciones (una inspección no conforme puede dejar el vehículo fuera de servicio) · Combustible · Incidentes · Notificaciones · Usuarios y roles · Configuración · Historial de estados y auditoría · Exportación CSV.
+Dashboard con datos reales · Vehículos · Conductores y licencias · Asignaciones (valida estado del vehículo, licencia vigente y cruces de fechas en la base de datos) · Mantenimiento · Documentación y vencimientos · Inspecciones (una inspección no conforme puede dejar el vehículo fuera de servicio) · Combustible · Incidentes · Notificaciones · Usuarios y roles · Configuración · Historial de estados y auditoría · Exportación a Excel (.xlsx).
 
 ---
 
@@ -109,7 +121,7 @@ Dashboard con datos reales · Vehículos · Conductores y licencias · Asignacio
 
 ### 6.1 Instalar
 
-1. Copie la APK **`dist/SIGFV-2.1.0.apk`** al teléfono (cable, WhatsApp, Drive, etc.).
+1. Copie la APK **`SIGFV-2.3.0-release.apk`** (raíz del proyecto) al teléfono (cable, WhatsApp, Drive, etc.).
 2. Permita **Instalar aplicaciones de origen desconocido** para el explorador/gestor de archivos.
 3. Abra el APK e instale.
 
@@ -117,7 +129,7 @@ La APK está firmada (release) con el keystore `android/sigfv-release.keystore` 
 
 ### 6.2 Conexión con el backend (URL interna)
 
-La APK **no pide ni muestra la URL del servidor**: `https://sigfv.onrender.com` va grabada en el código al compilar. El usuario solo ingresa su usuario y contraseña.
+La APK **no pide ni muestra la URL del servidor**: `https://sigfv.onrender.com` va grabada en el código al compilar. El usuario solo elige empresa, rol e ingresa la contraseña.
 
 - Al abrir, la app comprueba `/api/health` y reintenta automáticamente mientras Render despierta.
 - Mientras la app está en uso, envía un ping cada 4 minutos para mantener el servicio activo.
@@ -144,7 +156,7 @@ Para grabar otra URL pública:
 npm run mobile:apk:public -- https://sigfv.midominio.com
 ```
 
-Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.1.0.apk`.
+Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.3.0.apk`.
 
 Para la release sin copiar a `dist`:
 
@@ -160,7 +172,7 @@ npm run mobile:apk
 
 Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-> La versión actual es `versionCode 3` / `versionName 2.1.0`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
+> La versión actual es `versionCode 5` / `versionName 2.3.0`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
 
 > `npm run mobile:apk:public` busca automáticamente un JDK 21 instalado. Si usa `npm run mobile:release` directamente, defina `JAVA_HOME` al JDK 21 (Gradle 8.11 no usa Java 25).
 
@@ -172,8 +184,8 @@ Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ```
 SIGFV/
-├─ server.js                 API REST + servidor de la web
-├─ db.js                     Pool PostgreSQL → Supabase
+├─ api/                      Backend .NET 10 en capas (Domain/Application/Infrastructure/Api)
+├─ SIGFV-2.3.0-release.apk   APK firmada lista para instalar
 ├─ .env                      Credenciales locales (NO compartir)
 ├─ .env.example              Plantilla de variables
 ├─ .env.production.example   Plantilla para VPS

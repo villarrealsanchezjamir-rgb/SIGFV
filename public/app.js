@@ -68,6 +68,21 @@ const GROUP_MAP = {
   marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
   proveedores_combustible: 'administracion', talleres: 'administracion', roles: 'administracion'
 };
+const GROUP_OWNERS = {
+  operaciones: 'Supervisor de flota',
+  mantenimiento: 'Responsable de mantenimiento',
+  logistica: 'Encargado de logística',
+  seguridad: 'Personal de seguridad',
+  administracion: 'Administrador'
+};
+const MODULE_ORDER = [
+  'vehiculos', 'conductores', 'asignaciones',
+  'mantenimientos', 'inspecciones',
+  'abastecimientos', 'documentos',
+  'incidentes',
+  'usuarios', 'roles', 'empresas', 'unidades_mineras',
+  'marcas', 'modelos', 'propietarios', 'proveedores_combustible', 'talleres'
+];
 
 const state = {
   token: sessionStorage.getItem('sigfv_token') || '',
@@ -151,12 +166,17 @@ function initials(name) {
 
 /* ---------- Agrupación y navegación ---------- */
 function buildGroups() {
-  const groups = GROUP_DEFS.map(g => ({ ...g, items: [] }));
+  const groups = GROUP_DEFS.map(g => ({ ...g, owner: GROUP_OWNERS[g.id] || 'Administrador', items: [] }));
   const byId = Object.fromEntries(groups.map(g => [g.id, g]));
   for (const [key, r] of Object.entries(state.meta.resources)) {
     const gid = GROUP_MAP[key] || (r.group === 'Catálogos' || r.group === 'Configuración' ? 'administracion' : 'operaciones');
     (byId[gid] || byId.operaciones).items.push({ key, ...r });
   }
+  const order = key => {
+    const i = MODULE_ORDER.indexOf(key);
+    return i < 0 ? 999 : i;
+  };
+  for (const g of groups) g.items.sort((a, b) => (a.order ?? order(a.key)) - (b.order ?? order(b.key)) || a.label.localeCompare(b.label));
   return groups.filter(g => g.items.length);
 }
 function groupNameOf(key) {
@@ -298,11 +318,12 @@ function renderNav() {
   for (const g of groups) {
     const closed = state.collapsed[g.id] ? ' closed' : '';
     html += `<div class="nav-group${closed}" data-group="${g.id}">
-      <button class="nav-head">${ic(g.icon)}<span>${esc(g.title)}</span>${ic('down', 'sm chev')}</button>
+      <button class="nav-head">${ic(g.icon)}<span>${esc(g.title)}</span><small class="nav-owner" title="Encargado del área">${esc(g.owner)}</small>${ic('down', 'sm chev')}</button>
       <div class="nav-items">${g.items.map(r => `<button class="nav-item" data-key="${r.key}">${ic(r.icon || 'package')}${esc(r.label)}</button>`).join('')}</div>
     </div>`;
   }
   const extras = [];
+  extras.push(`<button class="nav-item" data-key="responsables">${ic('shield')}Módulos y responsables</button>`);
   if (can('configuracion', 'consultar')) {
     extras.push(`<button class="nav-item" data-key="empresas">${ic('building')}Empresas clientes</button>`);
     extras.push(`<button class="nav-item" data-key="auditoria">${ic('shield')}Auditoría</button>`);
@@ -338,6 +359,7 @@ function navigate(key) {
   if (key === 'dashboard') renderDashboard();
   else if (key === 'notificaciones') renderNotifications();
   else if (key === 'cuenta') renderAccount();
+  else if (key === 'responsables') renderOwners();
   else if (key === 'roles') renderRoles();
   else if (key === 'empresas') renderCompanies();
   else if (key === 'auditoria') renderAudit();
@@ -408,6 +430,31 @@ async function renderDashboard() {
   }
 }
 
+/* ---------- Módulos y responsables ---------- */
+function renderOwners() {
+  crumb(['Administración', 'Módulos y responsables']);
+  const groups = buildGroups();
+  const owners = Array.isArray(state.meta.owners) && state.meta.owners.length
+    ? state.meta.owners
+    : groups.map(g => ({ id: g.id, title: g.title, desc: g.desc, responsable: g.owner, modules: g.items }));
+  const cards = owners.map(a => {
+    const group = groups.find(g => g.id === a.id);
+    const modules = (a.modules || []).filter(m => m.key === 'roles' || state.meta.resources[m.key]).map(m => {
+      const r = state.meta.resources[m.key] || {};
+      const label = m.label || r.label || m.key;
+      const resp = m.responsable || r.responsable || a.responsable;
+      const actions = Array.isArray(m.acciones) && m.acciones.length ? m.acciones : ['consultar'];
+      return `<div class="owner-mod"><div class="om-main"><strong>${esc(label)}</strong><small>${esc(resp)}</small><div class="om-actions">${actions.map(x => `<span>${esc(x)}</span>`).join('')}</div></div><button class="btn ghost sm" data-go="${esc(m.key)}">Abrir</button></div>`;
+    }).join('');
+    return `<section class="card owner-card">
+      <div class="card-head">${ic(group?.icon || 'package')}<h3>${esc(a.title)}</h3><span class="spacer"></span><span class="owner-chip">${ic('user')}${esc(a.responsable)}</span></div>
+      <div class="card-body"><p class="muted" style="margin-bottom:12px;font-size:12.5px">${esc(a.desc || '')}</p>${modules || '<span class="muted">Sin módulos disponibles para su rol.</span>'}</div>
+    </section>`;
+  }).join('');
+  $('#view').innerHTML = `<div class="page-head"><div><h1>Módulos y responsables</h1><p>Cada módulo pertenece a un área y tiene un responsable funcional. Se muestran únicamente los módulos permitidos para el rol con el que ingresó.</p></div></div><div class="owner-grid">${cards}</div>`;
+  $('#view').querySelectorAll('[data-go]').forEach(b => b.onclick = () => navigate(b.dataset.go));
+}
+
 /* ---------- Listados ---------- */
 const isNumeric = v => v != null && v !== '' && !isNaN(Number(v)) && !/^\d{4}-\d{2}-\d{2}/.test(String(v));
 function renderList(key) {
@@ -417,7 +464,7 @@ function renderList(key) {
   state.q = '';
   $('#view').innerHTML = `
     <div class="page-head">
-      <div><h1>${esc(r.label)}</h1><p>Consulte, registre y administre ${esc(r.label.toLowerCase())}.</p></div>
+      <div><h1>${esc(r.label)}</h1><p>Consulte, registre y administre ${esc(r.label.toLowerCase())}.<span class="owner-chip">${ic('user')}Encargado: ${esc(r.responsable || GROUP_OWNERS[GROUP_MAP[key]] || 'Administrador')}</span></p></div>
       <div class="spacer"></div>
       <div class="head-actions">
         ${r.exportar ? `<button class="btn ghost" id="btnExport">${ic('download')}Exportar Excel</button>` : ''}

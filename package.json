@@ -1,6 +1,6 @@
-﻿{
+{
   "name": "sigfv",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "main": "server.js",
   "description": "SIGFV Â· GestiÃ³n de flota vehicular sobre Supabase",
@@ -22,6 +22,7 @@
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env sigfv"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.2",
     "@supabase/supabase-js": "^2.49.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",

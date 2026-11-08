@@ -245,3 +245,20 @@ dialog::backdrop{background:#0007}
 .perm-chip input{accent-color:var(--gold-d);margin:0}
 .perm-chip:has(input:checked){border-color:var(--gold);background:#fdf8e9}
 @media(max-width:860px){.perm-grid{grid-template-columns:1fr}}
+
+/* ---------- Módulos y responsables (2.3) ---------- */
+.nav-owner{margin-left:auto;margin-right:6px;font-size:9.5px;line-height:1.1;font-weight:500;color:#8a8f95;text-align:right;max-width:92px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.owner-chip{display:inline-flex;align-items:center;gap:5px;margin-left:9px;padding:3px 9px;border-radius:20px;background:#f7f1dc;color:#7a6420;font-size:11px;font-weight:600;white-space:nowrap;vertical-align:middle}
+.owner-chip .ic{width:12px;height:12px;color:#a98a2c}
+.owner-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;align-items:start}
+.owner-card .card-head h3{font-size:14.5px}
+.owner-mod{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid #f0f1f2}
+.owner-mod:last-child{border-bottom:0;padding-bottom:0}
+.owner-mod:first-child{padding-top:0}
+.om-main{flex:1;min-width:0}
+.om-main strong{display:block;font-size:13px;font-weight:600}
+.om-main small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.om-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.om-actions span{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--steel);background:#f3f4f5;border:1px solid #e8e9eb;border-radius:20px;padding:2px 7px}
+.owner-mod .btn{padding:6px 11px;font-size:11.5px;flex:none}
+@media(max-width:860px){.owner-grid{grid-template-columns:1fr}.nav-owner{display:none}}

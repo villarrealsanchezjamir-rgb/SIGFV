@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -14,7 +14,7 @@ using SIGFV.Infrastructure.Excel;
 using SIGFV.Infrastructure.Persistence;
 using SIGFV.Infrastructure.Security;
 
-const string Version = "2.2.0";
+const string Version = "2.3.0";
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 var root = FindRoot();
@@ -23,7 +23,7 @@ LoadDotEnv(root);
 var port = int.TryParse(Env("PORT") ?? "3000", out var p) ? p : 3000;
 var connectionString = Env("SUPABASE_DB_URL") ?? Env("ConnectionStrings__Supabase");
 if (string.IsNullOrWhiteSpace(connectionString))
-    throw new InvalidOperationException("Defina SUPABASE_DB_URL (cadena de conexión de Supabase/PostgreSQL).");
+    throw new InvalidOperationException("Defina SUPABASE_DB_URL (cadena de conexiÃ³n de Supabase/PostgreSQL).");
 var jwtSecret = Env("JWT_SECRET");
 if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
     throw new InvalidOperationException("Defina JWT_SECRET con al menos 32 caracteres.");
@@ -115,11 +115,11 @@ app.Use(async (ctx, next) =>
             ctx.Response.Clear();
             var (status, message) = ex.SqlState switch
             {
-                "23505" => (409, "Ya existe un registro con ese valor único (código, placa, documento, RUC, etc.)."),
-                "23514" => (400, "Algún valor no cumple las reglas de validación (fechas, cantidades o titular del documento)."),
-                "23503" => (400, "Alguno de los datos relacionados no existe o está en uso."),
+                "23505" => (409, "Ya existe un registro con ese valor Ãºnico (cÃ³digo, placa, documento, RUC, etc.)."),
+                "23514" => (400, "AlgÃºn valor no cumple las reglas de validaciÃ³n (fechas, cantidades o titular del documento)."),
+                "23503" => (400, "Alguno de los datos relacionados no existe o estÃ¡ en uso."),
                 "23502" => (400, "Falta un dato obligatorio."),
-                "22P02" or "22007" or "22008" or "22003" or "22001" => (400, "Formato de dato inválido."),
+                "22P02" or "22007" or "22008" or "22003" or "22001" => (400, "Formato de dato invÃ¡lido."),
                 "P0001" => (409, ex.MessageText),
                 _ => (500, "Error de base de datos.")
             };
@@ -134,7 +134,7 @@ app.Use(async (ctx, next) =>
         {
             ctx.Response.Clear();
             ctx.Response.StatusCode = 400;
-            await ctx.Response.WriteAsJsonAsync(new { error = "El cuerpo de la solicitud no es válido: " + ex.Message });
+            await ctx.Response.WriteAsJsonAsync(new { error = "El cuerpo de la solicitud no es vÃ¡lido: " + ex.Message });
         }
     }
     catch (Exception ex)
@@ -169,7 +169,7 @@ app.Use(async (ctx, next) =>
     {
         var token = ReadToken(ctx);
         if (string.IsNullOrWhiteSpace(token))
-            throw new AppException("Sesión no iniciada o vencida.", 401);
+            throw new AppException("SesiÃ³n no iniciada o vencida.", 401);
 
         var handler = new JwtSecurityTokenHandler();
         var parameters = new TokenValidationParameters
@@ -185,7 +185,7 @@ app.Use(async (ctx, next) =>
         var roleId = ClaimInt(principal, "rid");
         var empresaId = ClaimInt(principal, "eid");
         if (roleId is null || empresaId is null)
-            throw new AppException("Sesión no válida. Vuelva a ingresar.", 401);
+            throw new AppException("SesiÃ³n no vÃ¡lida. Vuelva a ingresar.", 401);
 
         var userId = ClaimInt(principal, "sub");
         var operador = principal.FindFirst("op")?.Value;
@@ -208,7 +208,7 @@ app.Use(async (ctx, next) =>
         if (!ctx.Response.HasStarted)
         {
             ctx.Response.StatusCode = 401;
-            await ctx.Response.WriteAsJsonAsync(new { error = "Sesión no iniciada o vencida." });
+            await ctx.Response.WriteAsJsonAsync(new { error = "SesiÃ³n no iniciada o vencida." });
         }
         return;
     }
@@ -235,11 +235,11 @@ app.MapGet("/api/auth/context", async (AuthService auth, CancellationToken ct) =
 app.MapPost("/api/auth/login", async (JsonElement body, HttpContext ctx, AuthService auth, CancellationToken ct) =>
 {
     if (body.ValueKind != JsonValueKind.Object)
-        throw new AppException("Solicitud no válida.");
+        throw new AppException("Solicitud no vÃ¡lida.");
 
     if (body.TryGetProperty("usuario", out _) && !body.TryGetProperty("rolId", out _))
         throw new AppException(
-            "Esta versión ya no usa usuario y contraseña. Ingrese con empresa, rol y contraseña, o actualice la aplicación.",
+            "Esta versiÃ³n ya no usa usuario y contraseÃ±a. Ingrese con empresa, rol y contraseÃ±a, o actualice la aplicaciÃ³n.",
             426);
 
     var request = new LoginRequest(
@@ -272,7 +272,7 @@ app.MapGet("/api/cat/{name}", async (string name, HttpContext ctx, CatalogServic
         !session.Has("mantenimiento", "consultar") && !session.Has("documentos", "consultar") &&
         !session.Has("combustible", "consultar") && !session.Has("incidentes", "consultar") &&
         !session.Has("inspecciones", "consultar") && !session.Has("usuarios", "consultar"))
-        throw new AppException("No tiene permiso para consultar catálogos.", 403);
+        throw new AppException("No tiene permiso para consultar catÃ¡logos.", 403);
 
     return Results.Ok(await catalogs.GetAsync(name, session, ct));
 });
@@ -466,18 +466,18 @@ app.Run();
 /* ---------- Utilidades ---------- */
 
 static CurrentSession Session(HttpContext ctx)
-    => ctx.Items["session"] as CurrentSession ?? throw new AppException("Sesión no iniciada.", 401);
+    => ctx.Items["session"] as CurrentSession ?? throw new AppException("SesiÃ³n no iniciada.", 401);
 
 static void Require(CurrentSession session, string module, string action)
 {
     if (!session.Has(module, action))
-        throw new AppException("No tiene permiso para esta acción.", 403);
+        throw new AppException("No tiene permiso para esta acciÃ³n.", 403);
 }
 
 static void RequireAny(CurrentSession session, params (string Module, string Action)[] permissions)
 {
     if (permissions.Any(p => session.Has(p.Module, p.Action))) return;
-    throw new AppException("No tiene permiso para esta acción.", 403);
+    throw new AppException("No tiene permiso para esta acciÃ³n.", 403);
 }
 
 static string? Ip(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString();

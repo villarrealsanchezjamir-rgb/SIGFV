@@ -282,3 +282,7 @@ body.sub #toast{bottom:calc(var(--sab) + 90px)}
 .offline-banner strong{display:block;font-size:12.5px;font-weight:700}
 .offline-banner small{display:block;font-size:11px;color:var(--steel);margin-top:2px}
 .offline-banner > .ic:last-child{color:#b9a15e}
+
+/* ---------- Módulos y responsables (2.3) ---------- */
+.owner-pill{display:inline-flex;align-items:center;max-width:112px;margin-left:auto;padding:3px 8px;border-radius:20px;background:#f7f1dc;color:#7a6420;font-size:9.5px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.mod-head > div{min-width:0}

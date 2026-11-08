@@ -8,11 +8,11 @@ Esta guía deja la web y la APK usando **un backend público con HTTPS** y la **
 
 ```
 Web (navegador) ─┐
-                 ├──► Backend Express público (HTTPS) ───► Supabase PostgreSQL
+                 ├──► Backend .NET 10 público (HTTPS) ───► Supabase PostgreSQL
 APK (Android) ───┘
 ```
 
-> La base de datos ya está en Supabase. Lo único que hay que mover a la nube es el backend (`server.js`).
+> La base de datos ya está en Supabase. Lo único que hay que mover a la nube es el backend (`api/`), que se compila con el `Dockerfile` incluido.
 
 ---
 

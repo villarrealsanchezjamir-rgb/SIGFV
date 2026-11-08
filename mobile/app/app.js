@@ -1,7 +1,7 @@
 'use strict';
 /* SIGFV · app móvil (Capacitor). La URL del backend va grabada en config.js. */
 const API = String(window.SIGFV_API_BASE || 'https://sigfv.onrender.com').replace(/\/+$/, '');
-const APP_VERSION = window.SIGFV_APP_VERSION || '2.2.0';
+const APP_VERSION = window.SIGFV_APP_VERSION || '2.3.0';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -70,6 +70,21 @@ const GROUP_MAP = {
   marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
   proveedores_combustible: 'administracion', talleres: 'administracion'
 };
+const GROUP_OWNERS = {
+  operaciones: 'Supervisor de flota',
+  mantenimiento: 'Responsable de mantenimiento',
+  logistica: 'Encargado de logística',
+  seguridad: 'Personal de seguridad',
+  administracion: 'Administrador'
+};
+const MODULE_ORDER = [
+  'vehiculos', 'conductores', 'asignaciones',
+  'mantenimientos', 'inspecciones',
+  'abastecimientos', 'documentos',
+  'incidentes',
+  'usuarios', 'empresas', 'unidades_mineras',
+  'marcas', 'modelos', 'propietarios', 'proveedores_combustible', 'talleres'
+];
 const TABS = [
   { id: 'home', label: 'Inicio', icon: 'home' },
   { id: 'modules', label: 'Módulos', icon: 'grid' },
@@ -241,12 +256,18 @@ function num(v) { const n = Number(v); return Number.isFinite(n) ? n.toLocaleStr
 function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase(); }
 function groupName(key) { const g = GROUP_DEFS.find(x => x.id === GROUP_MAP[key]); return g ? g.title : 'Módulos'; }
 function groups() {
-  const out = GROUP_DEFS.map(g => ({ ...g, items: [] }));
+  const out = GROUP_DEFS.map(g => ({ ...g, owner: GROUP_OWNERS[g.id] || 'Administrador', items: [] }));
   const by = Object.fromEntries(out.map(g => [g.id, g]));
   for (const [key, r] of Object.entries(state.meta.resources)) {
+    if (r.custom) continue;
     const gid = GROUP_MAP[key] || (r.mod === 'configuracion' ? 'administracion' : 'operaciones');
     (by[gid] || by.operaciones).items.push({ key, ...r });
   }
+  const order = key => {
+    const i = MODULE_ORDER.indexOf(key);
+    return i < 0 ? 999 : i;
+  };
+  for (const g of out) g.items.sort((a, b) => (a.order ?? order(a.key)) - (b.order ?? order(b.key)) || a.label.localeCompare(b.label));
   return out.filter(g => g.items.length);
 }
 
@@ -283,17 +304,20 @@ async function start() {
   $('#bootActions').classList.add('hidden');
   state.token = localStorage.getItem('sigfv_token') || sessionStorage.getItem('sigfv_token') || state.token;
   const cachedMeta = await idbGet('cache', 'meta');
+  // Arranque offline-first: si ya hay sesión y catálogo guardado, se entra
+  // de inmediato y la conexión se refresca en segundo plano.
+  if (state.token && cachedMeta) {
+    state.meta = cachedMeta;
+    state.online = navigator.onLine !== false;
+    showApp();
+    renderTab('home');
+    updatePending();
+    refreshSession();
+    return;
+  }
   const ok = await wake();
   state.online = ok;
   if (!ok) {
-    if (state.token && cachedMeta) {
-      state.meta = cachedMeta;
-      showApp();
-      renderTab('home');
-      toast('Modo sin conexión: usando datos guardados.', true);
-      updatePending();
-      return;
-    }
     showBootError('Sin conexión. Conéctese una vez para habilitar el modo offline.');
     return;
   }
@@ -323,6 +347,27 @@ async function start() {
       showLogin();
       $('#loginError').textContent = e.message;
     }
+  }
+}
+async function refreshSession() {
+  try {
+    state.meta = await apiRetry('/meta');
+    state.online = true;
+    await idbPut('cache', 'meta', state.meta);
+    renderTabs();
+    renderAppbar();
+    if (state.tab === 'home') { state.dash = null; renderHome(); }
+    else if (state.tab === 'modules') renderModules();
+    else if (state.tab === 'alerts') renderAlerts();
+    else if (state.tab === 'profile') renderProfile();
+    updatePending();
+    syncOutbox();
+    prefetchAll();
+  } catch (e) {
+    if (!isOfflineError(e)) return;
+    state.online = false;
+    if (state.meta) renderAppbar();
+    toast('Modo sin conexión: usando datos guardados.', true);
   }
 }
 async function loadContext(force = false) {
@@ -434,11 +479,12 @@ const KPI_DEFS = [
 ];
 const QUICK_ACTIONS = [
   ['vehiculos', 'Vehículo', 'truck'],
+  ['conductores', 'Conductor', 'id-card'],
+  ['asignaciones', 'Asignación', 'calendar'],
   ['inspecciones', 'Inspección', 'clipboard'],
   ['abastecimientos', 'Combustible', 'fuel'],
   ['mantenimientos', 'Mantenimiento', 'wrench'],
-  ['incidentes', 'Incidente', 'alert'],
-  ['conductores', 'Conductor', 'id-card']
+  ['incidentes', 'Incidente', 'alert']
 ];
 async function renderHome() {
   const v = $('#view');
@@ -522,9 +568,9 @@ function renderModules() {
       const isAdmin = g.id === 'administracion';
       const users = isAdmin ? g.items.filter(r => r.mod === 'usuarios') : [];
       const cats = isAdmin ? g.items.filter(r => r.mod !== 'usuarios') : g.items;
-      const row = r => `<button class="mod-item" data-key="${r.key}"><span class="mi">${ic(r.icon || 'package')}</span><span class="mt"><strong>${esc(r.label)}</strong><small>${r.crear ? 'Consultar y registrar' : 'Solo consulta'}</small></span>${ic('chevron', 'sm chev')}</button>`;
+      const row = r => `<button class="mod-item" data-key="${r.key}"><span class="mi">${ic(r.icon || 'package')}</span><span class="mt"><strong>${esc(r.label)}</strong><small>${r.crear ? 'Consultar y registrar' : 'Solo consulta'} · ${esc(r.responsable || g.owner)}</small></span>${ic('chevron', 'sm chev')}</button>`;
       return `<section class="mod-group" data-g="${g.id}">
-        <div class="mod-head"><span class="m-icon">${ic(g.icon)}</span><div><h2>${esc(g.title)}</h2><p>${esc(g.desc)}</p></div></div>
+        <div class="mod-head"><span class="m-icon">${ic(g.icon)}</span><div><h2>${esc(g.title)}</h2><p>${esc(g.desc)}</p></div><span class="owner-pill" title="Responsable del área">${esc(g.owner)}</span></div>
         ${users.length ? `<div class="subhead">Usuarios</div><div class="mod-card" style="margin-bottom:9px">${users.map(row).join('')}</div>` : ''}
         ${isAdmin && cats.length ? '<div class="subhead">Catálogos maestros</div>' : ''}
         <div class="mod-card">${cats.map(row).join('')}</div>
@@ -577,6 +623,27 @@ window.addEventListener('popstate', () => {
   if (sub.suppress) { sub.suppress = false; return; }
   if ($('#sub').classList.contains('open')) hideSub();
 });
+
+/* Botón físico "atrás" de Android: navega dentro de la app en lugar de
+   cerrarla. En el navegador se mantiene el historial normal. */
+let lastBackAt = 0;
+function hardwareBack() {
+  if ($('#sub') && $('#sub').classList.contains('open')) { subBack(); return true; }
+  if (state.tab !== 'home') { renderTab('home'); return true; }
+  const now = Date.now();
+  if (now - lastBackAt < 2200) {
+    try { window.Capacitor?.Plugins?.App?.exitApp?.(); } catch { }
+    return true;
+  }
+  lastBackAt = now;
+  toast('Presione atrás otra vez para salir.', true);
+  return true;
+}
+async function initBackButton() {
+  const App = window.Capacitor?.Plugins?.App;
+  if (!App?.addListener) return;
+  try { await App.addListener('backButton', () => { hardwareBack(); }); } catch { }
+}
 
 function openList(key) {
   const r = state.meta.resources[key];
@@ -981,6 +1048,14 @@ async function syncOutbox(manual = false) {
 }
 async function prefetchAll() {
   try {
+    try {
+      const dash = await api('/dashboard');
+      await idbPut('cache', cacheKey('dash'), dash);
+    } catch { }
+    try {
+      const alerts = await api('/notificaciones');
+      await idbPut('cache', cacheKey('alerts'), alerts);
+    } catch { }
     for (const key of Object.keys(state.meta.resources)) {
       const r = state.meta.resources[key];
       if (!r || r.custom) continue;
@@ -1049,8 +1124,22 @@ async function renderAlerts() {
   v.innerHTML = `<div class="section-head"><h2>Alertas del sistema</h2><button class="link" id="refreshAlerts">${ic('refresh', 'sm')}</button></div>
     <div id="alertWrap">${Array.from({ length: 5 }, () => '<div class="skel" style="height:66px;margin-bottom:9px"></div>').join('')}</div>`;
   $('#refreshAlerts').onclick = renderAlerts;
+  let data;
   try {
-    const data = await apiRetry('/notificaciones');
+    data = await apiRetry('/notificaciones');
+    await idbPut('cache', cacheKey('alerts'), data);
+  } catch (e) {
+    data = await idbGet('cache', cacheKey('alerts'));
+    if (!data) {
+      const wrap = $('#alertWrap');
+      if (!wrap) return;
+      wrap.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar las alertas</strong><span>${esc(e.message)}</span><button class="btn ghost sm" id="retryAlerts">Reintentar</button></div>`;
+      const b = $('#retryAlerts'); if (b) b.onclick = renderAlerts;
+      return;
+    }
+    toast('Alertas sin conexión: datos guardados.', true);
+  }
+  try {
     state.alerts = data; state.notifCount = data.length;
     renderAppbar(); renderTabs();
     const count = f => {
@@ -1102,6 +1191,12 @@ function renderProfile() {
         <div class="info-row">${ic('refresh')}<span class="lbl"><strong>Cambios pendientes</strong><small>Operaciones por sincronizar</small></span><span class="val" id="profilePending">${state.pending}</span></div>
         <div class="info-row">${ic('wifi')}<span class="lbl"><strong>Servidor</strong><small>${online ? 'Conexión cifrada' : 'Sin conexión'}</small></span><span class="val">${online ? '<span class="online"><span class="p"></span>Operativo</span>' : '<span style="color:var(--warn);font-weight:600">Guardado local</span>'}</span></div>
         <div class="info-row">${ic('info')}<span class="lbl"><strong>Versión</strong><small>Aplicación móvil</small></span><span class="val">${esc(APP_VERSION)}</span></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h2>Módulos y responsables</h2></div>
+      <div class="card">
+        ${groups().map(g => `<div class="info-row">${ic(g.icon)}<span class="lbl"><strong>${esc(g.title)}</strong><small>${esc(g.desc)} · ${g.items.length} módulo(s)</small></span><span class="val">${esc(g.owner)}</span></div>`).join('') || '<div class="info-row"><span class="lbl"><strong>Sin módulos asignados</strong><small>Su rol no tiene permisos de consulta.</small></span></div>'}
       </div>
     </div>
     <div class="section">
@@ -1219,4 +1314,5 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.token) ping();
 });
 
+initBackButton();
 start();

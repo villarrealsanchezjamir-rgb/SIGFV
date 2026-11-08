@@ -9,7 +9,7 @@ public sealed class MetaService
     {
         var resources = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var r in ResourceCatalog.All.Values.OrderBy(x => x.Group).ThenBy(x => x.Label))
+        foreach (var r in ResourceCatalog.All.Values.OrderBy(x => ModuleDirectory.OrderOf(x.Key)).ThenBy(x => x.Label))
         {
             if (!session.Has(r.Mod, "consultar")) continue;
             resources[r.Key] = new Dictionary<string, object?>
@@ -18,6 +18,9 @@ public sealed class MetaService
                 ["group"] = r.Group,
                 ["mod"] = r.Mod,
                 ["icon"] = r.Icon,
+                ["order"] = ModuleDirectory.OrderOf(r.Key),
+                ["responsable"] = ModuleDirectory.ResponsibleFor(r.Key),
+                ["area"] = ModuleDirectory.AreaFor(r.Key),
                 ["cols"] = r.Cols.Select(c => new object?[] { c.Key, c.Label, c.Kind }).ToList(),
                 ["fields"] = r.Fields.Select(f => new Dictionary<string, object?>
                 {
@@ -45,6 +48,9 @@ public sealed class MetaService
                 ["mod"] = "usuarios",
                 ["icon"] = "key",
                 ["custom"] = "roles",
+                ["order"] = ModuleDirectory.OrderOf("roles"),
+                ["responsable"] = ModuleDirectory.ResponsibleFor("roles"),
+                ["area"] = ModuleDirectory.AreaFor("roles"),
                 ["cols"] = new List<object?>(),
                 ["fields"] = new List<object?>(),
                 ["crear"] = session.Has("usuarios", "crear") || session.Has("usuarios", "editar"),
@@ -53,6 +59,24 @@ public sealed class MetaService
                 ["exportar"] = false
             };
         }
+
+        var owners = ModuleDirectory.Areas.Select(area => new Dictionary<string, object?>
+        {
+            ["id"] = area.Id,
+            ["title"] = area.Title,
+            ["desc"] = area.Description,
+            ["responsable"] = area.Responsible,
+            ["modules"] = resources
+                .Where(kv => ModuleDirectory.AreaFor(kv.Key) == area.Id)
+                .OrderBy(kv => ResourceOrder(kv.Value))
+                .Select(kv => new Dictionary<string, object?>
+                {
+                    ["key"] = kv.Key,
+                    ["label"] = kv.Value is Dictionary<string, object?> d && d.TryGetValue("label", out var label) ? label : null,
+                    ["responsable"] = area.Responsible,
+                    ["acciones"] = Actions(kv.Value)
+                }).ToList()
+        }).ToList();
 
         return new Dictionary<string, object?>
         {
@@ -64,7 +88,21 @@ public sealed class MetaService
             ["dashboard"] = session.Has("dashboard", "consultar"),
             ["notificaciones"] = session.Has("notificaciones", "consultar"),
             ["resources"] = resources,
+            ["owners"] = owners,
             ["permissions"] = session.Permissions.OrderBy(p => p).ToList()
         };
+    }
+
+    private static int ResourceOrder(object? value)
+        => value is Dictionary<string, object?> d && d.TryGetValue("order", out var order) && order is int n ? n : 999;
+
+    private static List<string> Actions(object? value)
+    {
+        var actions = new List<string>();
+        if (value is not Dictionary<string, object?> d) return actions;
+        actions.Add("consultar");
+        foreach (var (key, label) in new[] { ("crear", "crear"), ("editar", "editar"), ("eliminar", "eliminar"), ("exportar", "exportar") })
+            if (d.TryGetValue(key, out var flag) && flag is true) actions.Add(label);
+        return actions;
     }
 }
