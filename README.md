@@ -12,6 +12,14 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 
 > **Producción / uso real:** no deje el backend dependiendo de una PC. Despliegue el API en la nube con HTTPS; así la web y la APK funcionan desde cualquier red y sin abrir VS Code. Guía completa: **[DEPLOY.md](DEPLOY.md)**.
 
+### Novedades 2.4
+
+- **Registro público de empresas:** cualquier empresa puede registrarse desde el acceso de la web o de la APK **sin iniciar sesión**, dejar sus datos, sus requisitos y pedir uno o varios vehículos (tipo, categoría, cantidad, fechas y si requiere conductor).
+- **Bandeja de solicitudes para el administrador:** revisa cada solicitud, aprueba o rechaza con observación y **asigna vehículo y conductor** en el mismo paso.
+- **Aprobación con efectos en la base de datos:** al aprobar se crea/reutiliza la empresa por RUC, se crea/reutiliza su unidad minera, se reasignan los vehículos elegidos y se registra la asignación tipo `alquiler`.
+- **Contador de pendientes** en el menú y en `/api/meta`, tanto en la web como en la APK.
+- **APK actualizada:** `dist/SIGFV-2.4.0-release.apk` con el nuevo registro público y el módulo de solicitudes.
+
 ### Novedades 2.3
 
 - **Modo offline real en la APK:** inicia con los datos guardados aunque no haya internet, permite consultar/registrar/editar/eliminar y sincroniza automáticamente al recuperar la conexión.
@@ -34,7 +42,9 @@ La web y la APK usan **la misma API y la misma base de datos en Supabase**. La a
 - **Excel real (.xlsx)** por módulo y libro completo con todos los módulos permitidos.
 - **Módulos y responsables**: cada área muestra el rol encargado (web y APK).
 - Botón físico **atrás** de Android integrado: navega dentro de la app y solo sale con doble pulsación en Inicio.
-- APK release listo para instalar: **`SIGFV-2.3.0-release.apk`** (URL del backend grabada, no se pide al usuario).
+- **Registro público de empresas** (web y APK) con requisitos y pedido de vehículos, guardado en `solicitudes_empresa` y `solicitud_vehiculos`.
+- **Bandeja de solicitudes** con aprobación/rechazo y asignación de vehículo y conductor; al aprobar se crea la empresa, su unidad minera y la asignación.
+- APK release listo para instalar: **`SIGFV-2.4.0-release.apk`** (URL del backend grabada, no se pide al usuario).
 - Despliegue en la nube preparado (Render, Railway, Fly.io y VPS con Docker + Caddy). Ver **`DEPLOY.md`**.
 - Keep-alive para Render en `.github/workflows/keepalive.yml`.
 
@@ -99,7 +109,7 @@ JWT_SECRET=UNA_CADENA_LARGA_Y_ALEATORIA_DE_32_O_MAS_CARACTERES
 ```json
 {
   "ok": true,
-  "version": "2.3.0",
+  "version": "2.4.0",
   "database": "Supabase PostgreSQL",
   "supabase": { "configured": true, "ok": true }
 }
@@ -107,13 +117,48 @@ JWT_SECRET=UNA_CADENA_LARGA_Y_ALEATORIA_DE_32_O_MAS_CARACTERES
 
 El esquema está en **`database/01_SIGFV_Supabase.sql`**. El archivo MySQL original quedó en `database/legacy/` solo como referencia y **no se usa**.
 
+La funcionalidad 2.4 agrega **`database/03_solicitudes_empresa.sql`** (tablas `solicitudes_empresa`, `solicitud_vehiculos` y la secuencia `solicitud_codigo_seq`). Es una migración incremental: **no borra datos** y ya está aplicada en el Supabase de producción.
+
+```bash
+psql "$SUPABASE_DB_URL" -f database/03_solicitudes_empresa.sql
+```
+
 > `JWT_SECRET` debe tener 32+ caracteres. Cámbielo en producción.
 
 ---
 
 ## 5. Módulos disponibles
 
-Dashboard con datos reales · Vehículos · Conductores y licencias · Asignaciones (valida estado del vehículo, licencia vigente y cruces de fechas en la base de datos) · Mantenimiento · Documentación y vencimientos · Inspecciones (una inspección no conforme puede dejar el vehículo fuera de servicio) · Combustible · Incidentes · Notificaciones · Usuarios y roles · Configuración · Historial de estados y auditoría · Exportación a Excel (.xlsx).
+Dashboard con datos reales · Vehículos · Conductores y licencias · Asignaciones (valida estado del vehículo, licencia vigente y cruces de fechas en la base de datos) · Mantenimiento · Documentación y vencimientos · Inspecciones (una inspección no conforme puede dejar el vehículo fuera de servicio) · Combustible · Incidentes · **Solicitudes de empresas** · Notificaciones · Usuarios y roles · Configuración · Historial de estados y auditoría · Exportación a Excel (.xlsx).
+
+### 5.1 Registro público de empresas y pedido de vehículos
+
+El enlace **«Solicitar registro y vehículos»** (web) y el botón **«Registrar mi empresa y pedir vehículos»** (APK) abren un formulario público, sin sesión. La empresa completa:
+
+- RUC, razón social, contacto, cargo, teléfono, correo, dirección, actividad y unidad minera/sede.
+- Los **requisitos y condiciones** del servicio.
+- Uno o varios **pedidos de vehículos**: tipo, categoría, cantidad, fechas, si requiere conductor y detalles.
+
+Al enviar se guarda una solicitud con código de seguimiento `SOL-AAAA-NNNN` y estado `pendiente`. El administrador la ve en **Administración → Solicitudes de empresas** (con contador de pendientes) y puede:
+
+| Acción | Efecto |
+|---|---|
+| **Aprobar y asignar** | Crea o reutiliza la empresa por RUC, crea o reutiliza su unidad minera, reasigna los vehículos elegidos a esa unidad y registra una asignación tipo `alquiler` por cada vehículo. |
+| **Rechazar** | Guarda el estado `rechazada` y el motivo en `respuesta_admin`. |
+
+Endpoints usados:
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| `GET` | `/api/public/registro/opciones` | Público: tipos de vehículo, categorías y requisitos |
+| `POST` | `/api/public/solicitudes` | Público: crea la solicitud (límite de 6 por hora por IP + honeypot) |
+| `GET` | `/api/solicitudes?estado=&q=` | Administrador |
+| `GET` | `/api/solicitudes/asignables` | Administrador: vehículos y conductores con licencia |
+| `GET` | `/api/solicitudes/{id}` | Administrador: detalle con pedidos |
+| `POST` | `/api/solicitudes/{id}/aprobar` | Administrador (permiso `configuracion:editar`) |
+| `POST` | `/api/solicitudes/{id}/rechazar` | Administrador (permiso `configuracion:editar`) |
+
+> El registro público requiere conexión a internet: la solicitud se guarda directamente en la base de datos. El resto de la APK sigue funcionando offline.
 
 ---
 
@@ -121,7 +166,7 @@ Dashboard con datos reales · Vehículos · Conductores y licencias · Asignacio
 
 ### 6.1 Instalar
 
-1. Copie la APK **`dist/SIGFV-2.3.0-release.apk`** al teléfono (cable, WhatsApp, Drive, etc.).
+1. Copie la APK **`dist/SIGFV-2.4.0-release.apk`** al teléfono (cable, WhatsApp, Drive, etc.).
 2. Permita **Instalar aplicaciones de origen desconocido** para el explorador/gestor de archivos.
 3. Abra el APK e instale.
 
@@ -156,7 +201,7 @@ Para grabar otra URL pública:
 npm run mobile:apk:public -- https://sigfv.midominio.com
 ```
 
-Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.3.0.apk`.
+Salida: `android/app/build/outputs/apk/release/app-release.apk` y copia automática a `dist/SIGFV-2.4.0-release.apk`.
 
 Para la release sin copiar a `dist`:
 
@@ -172,7 +217,7 @@ npm run mobile:apk
 
 Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-> La versión actual es `versionCode 5` / `versionName 2.3.0`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
+> La versión actual es `versionCode 6` / `versionName 2.4.0`. Aumente `versionCode` en `android/app/build.gradle` antes de cada nueva publicación para que Android permita actualizar sobre la APK anterior.
 
 > `npm run mobile:apk:public` busca automáticamente un JDK 21 instalado. Si usa `npm run mobile:release` directamente, defina `JAVA_HOME` al JDK 21 (Gradle 8.11 no usa Java 25).
 
@@ -185,7 +230,7 @@ Salida: `android/app/build/outputs/apk/debug/app-debug.apk`.
 ```
 SIGFV/
 ├─ api/                      Backend .NET 10 en capas (Domain/Application/Infrastructure/Api)
-├─ dist/SIGFV-2.3.0-release.apk   APK firmada lista para instalar
+├─ dist/SIGFV-2.4.0-release.apk   APK firmada lista para instalar
 ├─ .env                      Credenciales locales (NO compartir)
 ├─ .env.example              Plantilla de variables
 ├─ .env.production.example   Plantilla para VPS
@@ -205,6 +250,7 @@ SIGFV/
 │  └─ www/                   Copia empaquetada (generada)
 ├─ database/
 │  ├─ 01_SIGFV_Supabase.sql  Esquema PostgreSQL (Supabase)
+│  ├─ 03_solicitudes_empresa.sql  Migración 2.4: solicitudes y pedidos de vehículos
 │  └─ legacy/                Esquema MySQL original (no usado)
 ├─ scripts/
 │  ├─ crear-admin.js
@@ -264,6 +310,9 @@ SIGFV/
 | Se borraron los datos | Alguien ejecutó `db:setup` o se apuntó a otro proyecto Supabase. Restaure el respaldo. |
 | Supabase pausado | En el plan gratuito el proyecto se pausa por inactividad; reactívelo en el panel de Supabase. |
 | Render free tarda en abrir | El plan free duerme el servicio; la primera visita puede tardar ~1 minuto. Use un plan siempre activo para producción. |
+| `Conductor inhabilitado o con licencia vencida` al aprobar | El trigger `fn_validar_asignacion` exige que la licencia venza después de la fecha fin del pedido. Elija otro conductor o ajuste las fechas; la lista muestra la vigencia de cada licencia. |
+| `El estado del vehículo no permite asignaciones` | El vehículo está en mantenimiento, fuera de servicio o de baja. Elija un vehículo operativo. |
+| El registro público dice «Demasiadas solicitudes» | Límite antifraude de 6 solicitudes por hora por IP; espere o registre desde otra red. |
 | 502/503 en el backend | La app no escucha en el puerto `PORT` o falló el arranque. Revise los logs del proveedor. |
 
 ---

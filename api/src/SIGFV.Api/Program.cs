@@ -1,4 +1,5 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -14,7 +15,7 @@ using SIGFV.Infrastructure.Excel;
 using SIGFV.Infrastructure.Persistence;
 using SIGFV.Infrastructure.Security;
 
-const string Version = "2.3.0";
+const string Version = "2.4.0";
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 var root = FindRoot();
@@ -59,6 +60,7 @@ builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton<ExportService>();
 builder.Services.AddSingleton<SyncService>();
 builder.Services.AddSingleton<AdminService>();
+builder.Services.AddSingleton<SolicitudService>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -159,6 +161,7 @@ app.Use(async (ctx, next) =>
     if (!path.StartsWithSegments("/api") ||
         path.StartsWithSegments("/api/health") ||
         path.StartsWithSegments("/api/auth/login") ||
+        path.StartsWithSegments("/api/public") ||
         path.StartsWithSegments("/api/auth/context"))
     {
         await next();
@@ -261,8 +264,18 @@ app.MapPost("/api/auth/change-password", async (JsonElement body, HttpContext ct
     return Results.Ok(new { ok = true });
 });
 
-app.MapGet("/api/meta", (HttpContext ctx, MetaService meta) =>
-    Results.Ok(meta.Build(Session(ctx))));
+app.MapGet("/api/meta", async (HttpContext ctx, MetaService meta, SolicitudService solicitudes,
+    CancellationToken ct) =>
+{
+    var session = Session(ctx);
+    var result = meta.Build(session);
+    if (session.Has("configuracion", "consultar"))
+    {
+        try { result["solicitudesPendientes"] = await solicitudes.PendingCountAsync(ct); }
+        catch { result["solicitudesPendientes"] = 0; }
+    }
+    return Results.Ok(result);
+});
 
 app.MapGet("/api/cat/{name}", async (string name, HttpContext ctx, CatalogService catalogs, CancellationToken ct) =>
 {
@@ -289,6 +302,60 @@ app.MapGet("/api/notificaciones", async (HttpContext ctx, NotificationService no
     var session = Session(ctx);
     Require(session, "notificaciones", "consultar");
     return Results.Ok(await notifications.GetAsync(session, ct));
+});
+
+/* ---------- Registro público de empresas (sin sesión) ---------- */
+
+app.MapGet("/api/public/registro/opciones", async (SolicitudService solicitudes, CancellationToken ct) =>
+    Results.Ok(await solicitudes.ContextoAsync(ct)));
+
+app.MapPost("/api/public/solicitudes", async (JsonElement body, HttpContext ctx,
+    SolicitudService solicitudes, CancellationToken ct) =>
+{
+    var request = ReadSolicitud(body);
+    var result = await solicitudes.CreateAsync(request, Ip(ctx), ct);
+    return Results.Created($"/api/solicitudes/{result["id"]}", result);
+});
+
+/* ---------- Bandeja de solicitudes (administrador) ---------- */
+
+app.MapGet("/api/solicitudes", async (string? estado, string? q, HttpContext ctx,
+    SolicitudService solicitudes, CancellationToken ct) =>
+{
+    Require(Session(ctx), "configuracion", "consultar");
+    return Results.Ok(await solicitudes.ListAsync(estado, q, ct));
+});
+
+app.MapGet("/api/solicitudes/asignables", async (HttpContext ctx, SolicitudService solicitudes,
+    CancellationToken ct) =>
+{
+    Require(Session(ctx), "configuracion", "consultar");
+    return Results.Ok(await solicitudes.AsignablesAsync(ct));
+});
+
+app.MapGet("/api/solicitudes/{id:int}", async (int id, HttpContext ctx, SolicitudService solicitudes,
+    CancellationToken ct) =>
+{
+    Require(Session(ctx), "configuracion", "consultar");
+    return Results.Ok(await solicitudes.DetailAsync(id, ct));
+});
+
+app.MapPost("/api/solicitudes/{id:int}/aprobar", async (int id, JsonElement body, HttpContext ctx,
+    SolicitudService solicitudes, CancellationToken ct) =>
+{
+    var session = Session(ctx);
+    Require(session, "configuracion", "editar");
+    var result = await solicitudes.ApproveAsync(id, ReadDecision(body), session, ct);
+    return Results.Ok(result);
+});
+
+app.MapPost("/api/solicitudes/{id:int}/rechazar", async (int id, JsonElement body, HttpContext ctx,
+    SolicitudService solicitudes, CancellationToken ct) =>
+{
+    var session = Session(ctx);
+    Require(session, "configuracion", "editar");
+    await solicitudes.RejectAsync(id, GetString(body, "observacion") ?? GetString(body, "motivo"), session, ct);
+    return Results.Ok(new { ok = true });
 });
 
 app.MapGet("/api/r/{key}", async (string key, string? q, int? pagina, int? limit, HttpContext ctx,
@@ -511,6 +578,66 @@ static int? GetInt(JsonElement body, string name)
     if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty(name, out var value)) return null;
     if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)) return number;
     return int.TryParse(value.ToString(), out var parsed) ? parsed : null;
+}
+
+static DateTime? GetDate(JsonElement body, string name)
+{
+    var text = GetString(body, name);
+    if (string.IsNullOrWhiteSpace(text)) return null;
+    return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+        ? date
+        : null;
+}
+
+static bool GetBool(JsonElement body, string name)
+{
+    if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty(name, out var value)) return false;
+    return value.ValueKind == JsonValueKind.True ||
+           (value.ValueKind == JsonValueKind.String && value.GetString() is "true" or "1" or "si" or "sí");
+}
+
+static SolicitudCreateRequest ReadSolicitud(JsonElement body)
+{
+    var vehiculos = new List<SolicitudVehiculoRequest>();
+    if (body.ValueKind == JsonValueKind.Object &&
+        body.TryGetProperty("vehiculos", out var list) && list.ValueKind == JsonValueKind.Array)
+    {
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            vehiculos.Add(new SolicitudVehiculoRequest(
+                GetInt(item, "tipoVehiculoId"), GetInt(item, "categoriaVehiculoId"),
+                GetInt(item, "cantidad") ?? 1,
+                GetDate(item, "fechaInicio"), GetDate(item, "fechaFin"),
+                GetBool(item, "requiereConductor"), GetString(item, "detalles")));
+        }
+    }
+
+    return new SolicitudCreateRequest(
+        GetString(body, "ruc"), GetString(body, "razonSocial"), GetString(body, "contacto"),
+        GetString(body, "cargo"), GetString(body, "telefono"), GetString(body, "correo"),
+        GetString(body, "direccion"), GetString(body, "actividad"), GetString(body, "unidadSolicitada"),
+        GetString(body, "requisitos"), GetString(body, "observaciones"), vehiculos,
+        GetString(body, "website"), GetString(body, "origen"));
+}
+
+static SolicitudDecision ReadDecision(JsonElement body)
+{
+    var items = new List<SolicitudAsignacion>();
+    if (body.ValueKind == JsonValueKind.Object &&
+        body.TryGetProperty("items", out var list) && list.ValueKind == JsonValueKind.Array)
+    {
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            items.Add(new SolicitudAsignacion(
+                GetInt(item, "itemId") ?? 0,
+                GetInt(item, "vehiculoId"),
+                GetInt(item, "conductorId")));
+        }
+    }
+
+    return new SolicitudDecision(GetString(body, "observacion"), GetString(body, "unidadNombre"), items);
 }
 
 static RoleSaveRequest ReadRole(JsonElement body)

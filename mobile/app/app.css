@@ -286,3 +286,54 @@ body.sub #toast{bottom:calc(var(--sab) + 90px)}
 /* ---------- Módulos y responsables (2.3) ---------- */
 .owner-pill{display:inline-flex;align-items:center;max-width:112px;margin-left:auto;padding:3px 8px;border-radius:20px;background:#f7f1dc;color:#7a6420;font-size:9.5px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
 .mod-head > div{min-width:0}
+
+/* ---------- Registro público de empresas (2.4) ---------- */
+.login-reg{margin-top:10px}
+#registro{position:fixed;inset:0;z-index:95;background:var(--bg);display:flex;flex-direction:column}
+.mreg-head{display:flex;align-items:flex-start;gap:10px;background:linear-gradient(145deg,#232323,#151515);color:#fff;padding:calc(var(--sat) + 14px) 16px 16px;box-shadow:0 2px 14px #0003}
+.mreg-head button{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;color:#e6e7e8;flex:none;background:#ffffff10}
+.mreg-head > div{min-width:0}
+.mreg-head small{display:block;color:var(--gold);font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:4px}
+.mreg-head h2{font-size:17px;line-height:1.18;font-weight:600}
+.mreg-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:16px 14px calc(26px + var(--sab));max-width:680px;width:100%;margin:0 auto}
+.mreg-intro{margin-bottom:14px;background:#fdf8e8;border-color:#efe2b6}
+.mreg-intro strong{font-size:12.5px;color:#6b5a1c}
+.mreg-intro ul{list-style:none;display:grid;gap:8px;margin-top:9px}
+.mreg-intro li{display:flex;gap:8px;font-size:11.8px;color:#6b5a1c;line-height:1.35}
+.mreg-intro li .ic{width:14px;height:14px;color:var(--ok);flex:none;margin-top:1px}
+.mreg-veh{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 12px 2px;margin-bottom:10px}
+.mreg-veh-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mreg-veh-head strong{font-size:12.5px;font-weight:700;color:var(--steel);flex:1}
+.mreg-veh-head button{width:32px;height:32px;border-radius:9px;color:var(--bad);display:grid;place-items:center;background:#fdf3f3}
+.mreg-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.mreg-grid .wide{grid-column:1/-1}
+.mreg-check{display:flex;align-items:center;gap:8px;grid-column:1/-1;font-size:12.5px;font-weight:600;color:var(--steel);margin-bottom:12px}
+.mreg-check input{accent-color:var(--gold-d);width:18px;height:18px}
+.mreg-actions{display:flex;gap:9px;margin-top:14px}
+.mreg-actions .btn{flex:1}
+.mreg-success{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:32px 14px}
+.mreg-success-ico{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:#e9f5ef;color:var(--ok);font-size:30px;font-weight:700;border:1px solid #bfe1d0;margin-bottom:6px}
+.mreg-success h3{font-size:18px}
+.mreg-success p{font-size:13px;color:var(--muted);max-width:330px;margin-bottom:10px}
+.mreg-success .btn{width:100%;margin-top:4px}
+
+/* ---------- Bandeja de solicitudes (2.4) ---------- */
+.sol-card{margin-bottom:12px}
+.sol-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px}
+.sol-title strong{font-size:15px;flex:1;min-width:150px}
+.sol-kv{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid #f1f2f3;font-size:12.5px}
+.sol-kv:last-child{border-bottom:0}
+.sol-kv span{width:118px;flex:none;color:var(--muted);font-size:11.5px}
+.sol-kv b{font-weight:600;overflow-wrap:anywhere}
+.sol-text{font-size:12.8px;line-height:1.5;color:var(--steel);white-space:pre-wrap}
+.msol-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:9px}
+.msol-item-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.msol-item-head strong{font-size:13.5px;flex:1;min-width:130px}
+.msol-meta{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:11.5px;color:var(--steel)}
+.msol-meta b{font-weight:600;color:var(--carbon)}
+.msol-note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+.msol-assign{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.sol-assigned{display:flex;align-items:center;gap:7px;margin-top:9px;padding:8px 10px;border-radius:10px;background:#eef5f1;color:#1f6b49;font-size:12px;font-weight:600}
+.sol-assigned.muted{background:#f4f5f6;color:var(--muted);font-weight:500}
+.sol-assigned .ic{width:16px;height:16px;flex:none}
+@media(max-width:360px){.msol-assign{grid-template-columns:1fr}}

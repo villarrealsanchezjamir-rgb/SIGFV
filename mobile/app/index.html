@@ -59,8 +59,59 @@
       </div>
       <div class="error" id="loginError" role="alert"></div>
       <button class="btn primary full" id="loginBtn" type="submit">Ingresar</button>
-      <p class="login-note">Conexión segura · SIGFV v2.3<br><span id="offlineNote" class="hidden">Sin internet: puede seguir trabajando si ya inició sesión antes.</span></p>
+      <button class="btn ghost full login-reg" id="openRegistro" type="button">Registrar mi empresa y pedir vehículos</button>
+      <p class="login-note">Conexión segura · SIGFV v2.4<br><span id="offlineNote" class="hidden">Sin internet: puede seguir trabajando si ya inició sesión antes.</span></p>
     </form>
+  </div>
+
+  <!-- ============ Registro público de empresas ============ -->
+  <div id="registro" class="hidden" role="dialog" aria-modal="true" aria-labelledby="mregTitle">
+    <header class="mreg-head">
+      <button id="mregClose" aria-label="Cerrar"></button>
+      <div><small>Registro de empresas</small><h2 id="mregTitle">Solicite su registro y los vehículos que necesita</h2></div>
+    </header>
+    <div class="mreg-body">
+      <div id="mregFormWrap">
+        <div class="card pad mreg-intro">
+          <strong>Requisitos para registrar su empresa</strong>
+          <ul id="mregRequisitos"></ul>
+        </div>
+        <form id="mregForm" autocomplete="on">
+          <div class="subhead">Datos de la empresa</div>
+          <div class="card pad">
+            <div class="field"><label for="mregRuc">RUC <span class="req">*</span></label><input class="input" id="mregRuc" inputmode="numeric" maxlength="11" placeholder="11 dígitos" required></div>
+            <div class="field"><label for="mregRazon">Razón social <span class="req">*</span></label><input class="input" id="mregRazon" maxlength="150" placeholder="Nombre legal de la empresa" required></div>
+            <div class="field"><label for="mregContacto">Persona de contacto <span class="req">*</span></label><input class="input" id="mregContacto" maxlength="120" placeholder="Nombre y apellidos" required></div>
+            <div class="field"><label for="mregCargo">Cargo</label><input class="input" id="mregCargo" maxlength="80" placeholder="Ej. Jefe de logística"></div>
+            <div class="field"><label for="mregTelefono">Teléfono <span class="req">*</span></label><input class="input" id="mregTelefono" maxlength="30" inputmode="tel" placeholder="Ej. 999 888 777" required></div>
+            <div class="field"><label for="mregCorreo">Correo <span class="req">*</span></label><input class="input" id="mregCorreo" type="email" maxlength="120" placeholder="contacto@empresa.com" required></div>
+            <div class="field"><label for="mregDireccion">Dirección</label><input class="input" id="mregDireccion" maxlength="200" placeholder="Dirección fiscal u operativa"></div>
+            <div class="field"><label for="mregActividad">Actividad / rubro</label><input class="input" id="mregActividad" maxlength="150" placeholder="Ej. Minería, construcción"></div>
+            <div class="field" style="margin-bottom:0"><label for="mregUnidad">Unidad minera o sede</label><input class="input" id="mregUnidad" maxlength="150" placeholder="Lugar donde requiere la flota"></div>
+          </div>
+          <div class="subhead" style="margin-top:16px">Vehículos y servicio</div>
+          <div id="mregRows"></div>
+          <button class="btn ghost sm full" type="button" id="mregAddRow" style="margin-bottom:14px">+ Agregar otro vehículo</button>
+          <div class="card pad">
+            <div class="field"><label for="mregRequisitosTexto">Requisitos y condiciones <span class="req">*</span></label><textarea class="input" id="mregRequisitosTexto" rows="4" maxlength="2000" placeholder="Turnos, rutas, tiempos, requisitos del conductor, seguridad…" required></textarea></div>
+            <div class="field" style="margin-bottom:0"><label for="mregObservaciones">Observaciones</label><textarea class="input" id="mregObservaciones" rows="2" maxlength="1000" placeholder="Información adicional para el administrador"></textarea></div>
+          </div>
+          <input type="text" id="mregWebsite" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+          <div class="error" id="mregError" role="alert"></div>
+          <div class="mreg-actions">
+            <button class="btn ghost" type="button" id="mregCancel">Cancelar</button>
+            <button class="btn primary" type="submit" id="mregSubmit">Enviar solicitud</button>
+          </div>
+        </form>
+      </div>
+      <div id="mregSuccess" class="hidden mreg-success">
+        <div class="mreg-success-ico">✓</div>
+        <h3>Solicitud enviada</h3>
+        <p>Su código de seguimiento es <strong id="mregCode">—</strong>. El administrador revisará la información y se comunicará al teléfono o correo registrado.</p>
+        <button class="btn ghost full" type="button" id="mregAgain">Registrar otra solicitud</button>
+        <button class="btn primary full" type="button" id="mregClose2">Cerrar</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============ Aplicación ============ -->

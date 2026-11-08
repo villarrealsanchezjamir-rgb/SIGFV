@@ -60,6 +60,27 @@ public sealed class MetaService
             };
         }
 
+        if (session.Has("configuracion", "consultar"))
+        {
+            resources["solicitudes"] = new Dictionary<string, object?>
+            {
+                ["label"] = "Solicitudes de empresas",
+                ["group"] = "Administración",
+                ["mod"] = "configuracion",
+                ["icon"] = "building",
+                ["custom"] = "solicitudes",
+                ["order"] = ModuleDirectory.OrderOf("solicitudes"),
+                ["responsable"] = ModuleDirectory.ResponsibleFor("solicitudes"),
+                ["area"] = ModuleDirectory.AreaFor("solicitudes"),
+                ["cols"] = new List<object?>(),
+                ["fields"] = new List<object?>(),
+                ["crear"] = false,
+                ["editar"] = session.Has("configuracion", "editar"),
+                ["eliminar"] = false,
+                ["exportar"] = false
+            };
+        }
+
         var owners = ModuleDirectory.Areas.Select(area => new Dictionary<string, object?>
         {
             ["id"] = area.Id,

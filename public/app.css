@@ -262,3 +262,74 @@ dialog::backdrop{background:#0007}
 .om-actions span{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--steel);background:#f3f4f5;border:1px solid #e8e9eb;border-radius:20px;padding:2px 7px}
 .owner-mod .btn{padding:6px 11px;font-size:11.5px;flex:none}
 @media(max-width:860px){.owner-grid{grid-template-columns:1fr}.nav-owner{display:none}}
+
+/* ---------- Registro público de empresas (2.4) ---------- */
+.login-register{margin-top:16px;padding-top:15px;border-top:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.login-register span{color:var(--muted);font-size:12px}
+.login-register button{border:1px solid var(--gold);background:#fdf8e9;color:#6f5a1b;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:600}
+.login-register button:hover{background:#faf2d8;border-color:var(--gold-d)}
+#registro{position:fixed;inset:0;z-index:90;background:#171717;overflow-y:auto;padding:28px 18px 40px}
+.reg-shell{width:min(1120px,100%);margin:0 auto;background:var(--bg);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px #0007}
+.reg-head{display:flex;align-items:flex-start;gap:16px;background:linear-gradient(145deg,#232323,#161616);color:#fff;padding:26px 28px}
+.reg-head > div{flex:1;min-width:0}
+.reg-head small{display:block;color:var(--gold);font-size:10.5px;letter-spacing:1.1px;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+.reg-head h2{font-size:23px;line-height:1.15;letter-spacing:-.3px;font-weight:600;max-width:700px}
+.reg-head p{color:#b9bcc0;font-size:13px;margin-top:8px;max-width:720px}
+.reg-head .icon-btn{color:#e6e7e8;background:#ffffff10;border-color:#ffffff1a}
+.reg-head .icon-btn:hover{background:#ffffff1f}
+.reg-body{display:grid;grid-template-columns:300px 1fr;gap:0;align-items:start}
+.reg-side{padding:24px 22px;border-right:1px solid var(--line);background:#fff;position:sticky;top:0}
+.reg-side h3{font-size:13px;font-weight:600;margin-bottom:12px}
+.reg-side ul{list-style:none;display:grid;gap:11px}
+.reg-side li{display:flex;gap:9px;font-size:12.5px;color:var(--steel);line-height:1.4}
+.reg-side li .ic{width:15px;height:15px;color:var(--ok);margin-top:2px;flex:none}
+.reg-side-note{margin-top:18px;padding:13px;border-radius:11px;background:#fdf8e8;border:1px solid #efe2b6;color:#6b5a1c}
+.reg-side-note strong{font-size:12px}
+.reg-side-note p{font-size:11.5px;margin-top:5px;line-height:1.45}
+.reg-main{padding:24px 26px 30px;min-width:0}
+.reg-section{font-size:11px;letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--steel);display:flex;align-items:center;gap:10px;margin:8px 0 12px}
+.reg-section::after{content:"";flex:1;height:1px;background:var(--line)}
+.reg-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.reg-grid .wide{grid-column:1/-1}
+.reg-veh{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px 2px;margin-bottom:10px}
+.reg-veh-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.reg-veh-head strong{font-size:12.5px;color:var(--steel)}
+.reg-veh-head .icon-btn{margin-left:auto;width:28px;height:28px;color:var(--bad)}
+.reg-veh-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0 12px}
+.reg-veh-grid .wide{grid-column:1/-1}
+.reg-check{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--steel);margin:0 0 14px;padding-top:2px}
+.reg-check input{accent-color:var(--gold-d)}
+.reg-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap}
+.reg-success{display:grid;place-items:center;text-align:center;gap:8px;padding:42px 20px}
+.reg-success-ico{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#e9f5ef;color:var(--ok);font-size:28px;font-weight:700;border:1px solid #bfe1d0}
+.reg-success h3{font-size:18px}
+.reg-success p{color:var(--muted);font-size:13px;max-width:520px}
+.reg-success .reg-actions{justify-content:center;width:100%;margin-top:14px}
+@media(max-width:980px){.reg-body{grid-template-columns:1fr}.reg-side{position:static;border-right:0;border-bottom:1px solid var(--line)}.reg-veh-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.reg-head{padding:20px 18px}.reg-head h2{font-size:19px}.reg-main{padding:18px 16px 24px}.reg-grid,.reg-veh-grid{grid-template-columns:1fr}#registro{padding:0}.reg-shell{border-radius:0}}
+
+/* ---------- Bandeja de solicitudes (2.4) ---------- */
+.sol-chips{display:flex;gap:6px;flex-wrap:wrap}
+.sol-chips .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 13px;font-size:12px;font-weight:600;color:var(--steel)}
+.sol-chips .chip.on{background:var(--carbon);color:#fff;border-color:var(--carbon)}
+.sol-chips .chip.on::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin-left:6px;vertical-align:middle}
+.sol-block{margin-bottom:20px}
+.sol-block h3{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.6px;text-transform:uppercase;font-weight:600;color:var(--steel);padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.sol-block h3 .ic{color:var(--gold-d);width:16px;height:16px}
+.sol-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.sol-grid .wide{grid-column:1/-1}
+.sol-grid small{display:block;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.sol-grid strong{display:block;font-size:12.5px;font-weight:500;margin-top:2px;overflow-wrap:anywhere}
+.sol-text{font-size:12.5px;color:var(--steel);white-space:pre-wrap;line-height:1.5;margin-bottom:8px}
+.sol-item{border:1px solid var(--line);background:#fff;border-radius:11px;padding:12px 14px;margin-bottom:9px}
+.sol-item-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sol-item-head strong{font-size:13px;flex:1}
+.sol-item-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:11.5px;color:var(--steel)}
+.sol-item-meta b{font-weight:600;color:var(--carbon)}
+.sol-note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+.sol-assign{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
+.sol-assign .field{margin-bottom:4px}
+.sol-assigned{display:flex;align-items:center;gap:7px;margin-top:9px;padding:8px 10px;border-radius:8px;background:#eef5f1;color:#1f6b49;font-size:12px;font-weight:600}
+.sol-assigned.muted{background:#f4f5f6;color:var(--muted);font-weight:500}
+.sol-assigned .ic{width:15px;height:15px}
+@media(max-width:620px){.sol-grid,.sol-assign{grid-template-columns:1fr}}

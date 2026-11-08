@@ -44,3 +44,16 @@ public sealed record CompanySaveRequest(string? Ruc, string? RazonSocial, string
     string? Correo, string? Contacto, string? Notas, bool Activo);
 
 public sealed record NotificationDto(string Tipo, string Detalle, DateTime Fecha);
+
+public sealed record SolicitudVehiculoRequest(int? TipoVehiculoId, int? CategoriaVehiculoId, int Cantidad,
+    DateTime? FechaInicio, DateTime? FechaFin, bool RequiereConductor, string? Detalles);
+
+public sealed record SolicitudCreateRequest(string? Ruc, string? RazonSocial, string? Contacto, string? Cargo,
+    string? Telefono, string? Correo, string? Direccion, string? Actividad, string? UnidadSolicitada,
+    string? Requisitos, string? Observaciones, IReadOnlyList<SolicitudVehiculoRequest> Vehiculos,
+    string? Website, string? Origen);
+
+public sealed record SolicitudAsignacion(int ItemId, int? VehiculoId, int? ConductorId);
+
+public sealed record SolicitudDecision(string? Observacion, string? UnidadNombre,
+    IReadOnlyList<SolicitudAsignacion> Items);

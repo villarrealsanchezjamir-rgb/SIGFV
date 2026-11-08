@@ -64,6 +64,7 @@ const GROUP_MAP = {
   mantenimientos: 'mantenimiento', inspecciones: 'mantenimiento',
   abastecimientos: 'logistica', documentos: 'logistica',
   incidentes: 'seguridad',
+  solicitudes: 'administracion',
   usuarios: 'administracion', empresas: 'administracion', unidades_mineras: 'administracion',
   marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
   proveedores_combustible: 'administracion', talleres: 'administracion', roles: 'administracion'
@@ -80,6 +81,7 @@ const MODULE_ORDER = [
   'mantenimientos', 'inspecciones',
   'abastecimientos', 'documentos',
   'incidentes',
+  'solicitudes',
   'usuarios', 'roles', 'empresas', 'unidades_mineras',
   'marcas', 'modelos', 'propietarios', 'proveedores_combustible', 'talleres'
 ];
@@ -169,6 +171,7 @@ function buildGroups() {
   const groups = GROUP_DEFS.map(g => ({ ...g, owner: GROUP_OWNERS[g.id] || 'Administrador', items: [] }));
   const byId = Object.fromEntries(groups.map(g => [g.id, g]));
   for (const [key, r] of Object.entries(state.meta.resources)) {
+    if (r.custom) continue; // se muestra como acceso directo con contador
     const gid = GROUP_MAP[key] || (r.group === 'Catálogos' || r.group === 'Configuración' ? 'administracion' : 'operaciones');
     (byId[gid] || byId.operaciones).items.push({ key, ...r });
   }
@@ -325,6 +328,8 @@ function renderNav() {
   const extras = [];
   extras.push(`<button class="nav-item" data-key="responsables">${ic('shield')}Módulos y responsables</button>`);
   if (can('configuracion', 'consultar')) {
+    const pend = Number(state.meta.solicitudesPendientes || 0);
+    extras.push(`<button class="nav-item" data-key="solicitudes">${ic('building')}Solicitudes de empresas${pend ? `<span class="pill">${pend}</span>` : ''}</button>`);
     extras.push(`<button class="nav-item" data-key="empresas">${ic('building')}Empresas clientes</button>`);
     extras.push(`<button class="nav-item" data-key="auditoria">${ic('shield')}Auditoría</button>`);
   }
@@ -361,6 +366,7 @@ function navigate(key) {
   else if (key === 'cuenta') renderAccount();
   else if (key === 'responsables') renderOwners();
   else if (key === 'roles') renderRoles();
+  else if (key === 'solicitudes') renderSolicitudes();
   else if (key === 'empresas') renderCompanies();
   else if (key === 'auditoria') renderAudit();
   else if (key === 'export-all') exportAll();
@@ -1086,6 +1092,351 @@ async function renderAudit() {
   }
 }
 
+/* ---------- Registro público de empresas (2.4) ---------- */
+let regCtx = null;
+const regState = { rows: 0 };
+const regVal = (id) => ($(id) ? $(id).value.trim() : '');
+
+async function openRegistro() {
+  $('#registro').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  $('#regError').textContent = '';
+  $('#regSuccess').classList.add('hidden');
+  $('#regForm').classList.remove('hidden');
+  if (!regCtx) {
+    try {
+      regCtx = await api('/api/public/registro/opciones');
+      if (!regCtx || !regCtx.tipos) regCtx = { tipos: [], categorias: [], requisitos: [] };
+    } catch (e) {
+      regCtx = { tipos: [], categorias: [], requisitos: [] };
+      $('#regError').textContent = 'No se pudieron cargar los catálogos. Verifique su conexión.';
+    }
+  }
+  $('#regRequisitos').innerHTML = (regCtx.requisitos || []).map(r => `<li>${ic('check')}<span>${esc(r)}</span></li>`).join('');
+  if (!regState.rows) addRegRow();
+  setTimeout(() => $('#regRuc') && $('#regRuc').focus(), 120);
+}
+function closeRegistro() {
+  $('#registro').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+function renumberRegRows() {
+  $$('#regRows .reg-veh').forEach((el, i) => {
+    const t = el.querySelector('.reg-veh-head strong');
+    if (t) t.textContent = 'Vehículo ' + (i + 1);
+  });
+}
+function addRegRow() {
+  if (regState.rows >= 10) { toast('Puede agregar hasta 10 pedidos de vehículos.', true); return; }
+  regState.rows++;
+  const tipos = (regCtx?.tipos || []).map(t => `<option value="${t.id}">${esc(t.nombre)}</option>`).join('');
+  const cats = (regCtx?.categorias || []).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  const wrap = document.createElement('div');
+  wrap.className = 'reg-veh';
+  wrap.innerHTML = `
+    <div class="reg-veh-head"><strong>Vehículo ${regState.rows}</strong><button type="button" class="icon-btn" data-del-row title="Quitar">${ic('trash')}</button></div>
+    <div class="reg-veh-grid">
+      <div class="field"><label>Tipo de vehículo <span class="req">*</span></label><select class="input" data-f="tipo"><option value="">Seleccione…</option>${tipos}</select></div>
+      <div class="field"><label>Categoría</label><select class="input" data-f="categoria"><option value="">Cualquiera</option>${cats}</select></div>
+      <div class="field"><label>Cantidad</label><input class="input" data-f="cantidad" type="number" min="1" max="50" value="1"></div>
+      <div class="field"><label>Desde</label><input class="input" data-f="inicio" type="date"></div>
+      <div class="field"><label>Hasta</label><input class="input" data-f="fin" type="date"></div>
+      <label class="reg-check wide"><input type="checkbox" data-f="conductor"> Requiere conductor</label>
+      <div class="field wide"><label>Detalles del servicio</label><input class="input" data-f="detalles" maxlength="500" placeholder="Ruta, turno, horario o condiciones especiales"></div>
+    </div>`;
+  $('#regRows').appendChild(wrap);
+  wrap.querySelector('[data-del-row]').onclick = () => {
+    if ($$('#regRows .reg-veh').length === 1) { toast('Debe registrar al menos un vehículo.', true); return; }
+    wrap.remove();
+    renumberRegRows();
+  };
+}
+function collectRegVehiculos() {
+  return $$('#regRows .reg-veh').map(el => {
+    const val = f => el.querySelector(`[data-f="${f}"]`);
+    return {
+      tipoVehiculoId: Number(val('tipo').value || 0) || null,
+      categoriaVehiculoId: Number(val('categoria').value || 0) || null,
+      cantidad: Number(val('cantidad').value || 1),
+      fechaInicio: val('inicio').value || null,
+      fechaFin: val('fin').value || null,
+      requiereConductor: !!(val('conductor') && val('conductor').checked),
+      detalles: val('detalles').value.trim() || null
+    };
+  });
+}
+async function submitRegistro(e) {
+  e.preventDefault();
+  const err = $('#regError');
+  err.textContent = '';
+  const body = {
+    ruc: regVal('#regRuc').replace(/\D/g, ''),
+    razonSocial: regVal('#regRazon'),
+    contacto: regVal('#regContacto'),
+    cargo: regVal('#regCargo'),
+    telefono: regVal('#regTelefono'),
+    correo: regVal('#regCorreo'),
+    direccion: regVal('#regDireccion'),
+    actividad: regVal('#regActividad'),
+    unidadSolicitada: regVal('#regUnidad'),
+    requisitos: regVal('#regRequisitosTexto'),
+    observaciones: regVal('#regObservaciones'),
+    website: regVal('#regWebsite'),
+    origen: 'web',
+    vehiculos: collectRegVehiculos()
+  };
+  if (body.ruc.length !== 11) { err.textContent = 'Ingrese un RUC válido de 11 dígitos.'; return; }
+  if (body.razonSocial.length < 3) { err.textContent = 'Ingrese la razón social de la empresa.'; return; }
+  if (body.contacto.length < 3) { err.textContent = 'Ingrese la persona de contacto.'; return; }
+  if (body.telefono.replace(/\D/g, '').length < 6) { err.textContent = 'Ingrese un teléfono válido.'; return; }
+  if (!/^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$/.test(body.correo)) { err.textContent = 'Ingrese un correo electrónico válido.'; return; }
+  if (body.requisitos.length < 10) { err.textContent = 'Describa los requisitos o el servicio que necesita.'; return; }
+  if (!body.vehiculos.length) { err.textContent = 'Agregue al menos un vehículo.'; return; }
+  const sinTipo = body.vehiculos.findIndex(v => !v.tipoVehiculoId);
+  if (sinTipo >= 0) { err.textContent = `Seleccione el tipo de vehículo en el pedido ${sinTipo + 1}.`; return; }
+  const malas = body.vehiculos.find(v => v.fechaInicio && v.fechaFin && v.fechaFin < v.fechaInicio);
+  if (malas) { err.textContent = 'La fecha final no puede ser anterior a la fecha de inicio.'; return; }
+
+  const btn = $('#regSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Enviando solicitud…';
+  try {
+    const r = await api('/api/public/solicitudes', { method: 'POST', body, timeout: 45000 });
+    $('#regForm').classList.add('hidden');
+    $('#regSuccess').classList.remove('hidden');
+    $('#regCode').textContent = r.codigo || ('#' + r.id);
+    $('#regForm').reset();
+    $('#regRows').innerHTML = '';
+    regState.rows = 0;
+  } catch (x) {
+    err.textContent = x.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar solicitud';
+  }
+}
+
+/* ---------- Bandeja de solicitudes (administrador) ---------- */
+const solState = { estado: 'pendiente', q: '', items: [] };
+
+function renderSolicitudes() {
+  crumb(['Administración', 'Solicitudes de empresas']);
+  solState.q = '';
+  const chips = [['pendiente', 'Pendientes'], ['aprobada', 'Aprobadas'], ['rechazada', 'Rechazadas'], ['', 'Todas']];
+  $('#view').innerHTML = `
+    <div class="page-head">
+      <div><h1>Solicitudes de empresas</h1><p>Revise el registro de clientes, los requisitos y los vehículos pedidos.<span class="owner-chip">${ic('user')}Encargado: Administrador</span></p></div>
+      <div class="spacer"></div>
+      <div class="head-actions"><button class="btn ghost" id="solRefresh">${ic('refresh')}Actualizar</button></div>
+    </div>
+    <div class="toolbar">
+      <div class="sol-chips" id="solChips">${chips.map(([e, l]) => `<button class="chip ${solState.estado === e ? 'on' : ''}" data-e="${e}">${l}</button>`).join('')}</div>
+      <div class="search">${ic('search')}<input id="solQ" placeholder="Buscar por RUC, empresa, código o contacto…" autocomplete="off"></div>
+      <span class="muted" id="solCount" style="font-size:12.5px"></span>
+    </div>
+    <div class="table-card"><div class="table-wrap" id="solWrap"></div></div>`;
+  $$('#solChips [data-e]').forEach(b => b.onclick = () => {
+    solState.estado = b.dataset.e;
+    $$('#solChips .chip').forEach(x => x.classList.toggle('on', x === b));
+    loadSolicitudes();
+  });
+  $('#solQ').oninput = e => {
+    solState.q = e.target.value.trim();
+    clearTimeout(renderSolicitudes._t);
+    renderSolicitudes._t = setTimeout(loadSolicitudes, 320);
+  };
+  $('#solRefresh').onclick = loadSolicitudes;
+  loadSolicitudes();
+}
+async function loadSolicitudes() {
+  const wrap = $('#solWrap');
+  if (!wrap) return;
+  wrap.innerHTML = `<div style="padding:18px 16px;display:grid;gap:10px">${Array.from({ length: 6 }, () => '<div class="skel" style="width:' + (50 + Math.random() * 40).toFixed(0) + '%"></div>').join('')}</div>`;
+  try {
+    const rows = await api(`/api/solicitudes?estado=${encodeURIComponent(solState.estado)}&q=${encodeURIComponent(solState.q)}`);
+    solState.items = rows || [];
+    $('#solCount').textContent = `${solState.items.length} solicitud${solState.items.length === 1 ? '' : 'es'}`;
+    if (!solState.items.length) {
+      wrap.innerHTML = `<div class="empty"><span class="big">${ic('building')}</span><strong>No hay solicitudes ${solState.estado ? 'en este estado' : 'registradas'}</strong><span>Las empresas pueden registrarse desde la pantalla de acceso o desde la APK.</span></div>`;
+      return;
+    }
+    wrap.innerHTML = `<table><thead><tr><th>Código</th><th>Empresa</th><th>RUC</th><th>Contacto</th><th>Vehículos</th><th>Estado</th><th>Registrada</th><th style="text-align:right">Acciones</th></tr></thead><tbody>
+      ${solState.items.map(s => `<tr data-sol="${s.id}">
+        <td><strong>${esc(s.codigo)}</strong><br><small class="muted">${esc(s.origen || 'web')}</small></td>
+        <td><strong>${esc(s.razon_social)}</strong><br><small class="muted">${esc(s.unidad_solicitada || '—')}</small></td>
+        <td>${esc(s.ruc)}</td>
+        <td>${esc(s.contacto)}<br><small class="muted">${esc(s.telefono)} · ${esc(s.correo)}</small></td>
+        <td>${Number(s.unidades || 0)} pedido(s)<br><small class="muted">${Number(s.asignados || 0)} asignado(s)</small></td>
+        <td>${badge(s.estado)}</td>
+        <td>${fmt(s.creado_en)}</td>
+        <td><div class="row-actions"><button title="Revisar solicitud" data-review="${s.id}">${ic('eye')}</button></div></td>
+      </tr>`).join('')}</tbody></table>`;
+    wrap.querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => {
+      if (e.target.closest('button')) return;
+      openSolicitud(+tr.dataset.sol);
+    });
+    wrap.querySelectorAll('[data-review]').forEach(b => b.onclick = () => openSolicitud(+b.dataset.review));
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar las solicitudes</strong><span>${esc(e.message)}</span><button class="btn ghost" id="solRetry">Reintentar</button></div>`;
+    const b = $('#solRetry'); if (b) b.onclick = loadSolicitudes;
+  }
+}
+async function refreshMetaPendientes() {
+  try {
+    state.meta = await apiRetry('/api/meta');
+    renderNav();
+  } catch { }
+}
+async function openSolicitud(id) {
+  state.dirty = false;
+  $('#drawerHead').innerHTML = `<div><small>Solicitud de empresa</small><h2>Revisando solicitud…</h2></div><button class="icon-btn" id="drawerClose" title="Cerrar">${ic('x')}</button>`;
+  $('#drawerBody').innerHTML = '<div style="display:grid;gap:12px;padding-top:8px">' + Array.from({ length: 6 }, () => '<div class="skel" style="height:38px"></div>').join('') + '</div>';
+  $('#drawerFoot').innerHTML = '';
+  openDrawer();
+  $('#drawerClose').onclick = () => closeDrawer();
+  try {
+    const [s, asignables] = await Promise.all([
+      api('/api/solicitudes/' + id),
+      api('/api/solicitudes/asignables').catch(() => ({ vehiculos: [], conductores: [] }))
+    ]);
+    renderSolicitudDetail(s, asignables || { vehiculos: [], conductores: [] });
+  } catch (e) {
+    $('#drawerBody').innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo abrir la solicitud</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+function renderSolicitudDetail(s, asignables) {
+  const pendiente = String(s.estado) === 'pendiente';
+  const editable = pendiente && can('configuracion', 'editar');
+  const items = s.items || [];
+  $('#drawerHead').innerHTML = `<div><small>${esc(s.codigo)} · ${fmt(s.creado_en)}</small><h2>${esc(s.razon_social)}</h2><div style="margin-top:7px">${badge(s.estado)}</div></div><button class="icon-btn" id="drawerClose" title="Cerrar">${ic('x')}</button>`;
+  $('#drawerClose').onclick = () => closeDrawer();
+
+  const vehOpts = (asignables.vehiculos || []).map(v => `<option value="${v.id}">${esc(v.codigo_interno)}${v.placa ? ' · ' + esc(v.placa) : ''}${v.estado ? ' · ' + esc(v.estado) : ''}</option>`).join('');
+  const condOpts = (asignables.conductores || []).map(c => `<option value="${c.id}">${esc(c.apellidos + ', ' + c.nombres)}${c.licencia_vence ? ' · licencia hasta ' + esc(c.licencia_vence) : ' · sin licencia'}</option>`).join('');
+
+  const itemHtml = items.map(it => {
+    const asignado = it.vehiculo_id
+      ? `<div class="sol-assigned">${ic('truck')}${esc(it.vehiculo_codigo || 'Vehículo')}${it.vehiculo_placa ? ' · ' + esc(it.vehiculo_placa) : ''}${it.conductor ? ' · ' + esc(it.conductor) : ''}</div>`
+      : (pendiente ? '' : '<div class="sol-assigned muted">Sin vehículo asignado</div>');
+    const form = editable ? `<div class="sol-assign">
+      <div class="field"><label>Vehículo a asignar</label><select class="input sol-veh"><option value="">— Sin asignar —</option>${vehOpts}</select></div>
+      <div class="field"><label>Conductor</label><select class="input sol-cond"><option value="">— Sin conductor —</option>${condOpts}</select></div>
+    </div>` : asignado;
+    return `<div class="sol-item" data-item="${it.id}">
+      <div class="sol-item-head"><strong>${esc(it.tipo || 'Vehículo')}${it.categoria ? ' · ' + esc(it.categoria) : ''}</strong>${badge(it.estado)}</div>
+      <div class="sol-item-meta">
+        <span><b>Cantidad:</b> ${it.cantidad ?? 1}</span>
+        <span><b>Desde:</b> ${fmt(it.fecha_inicio)}</span>
+        <span><b>Hasta:</b> ${fmt(it.fecha_fin)}</span>
+        <span><b>Conductor:</b> ${it.requiere_conductor ? 'Sí' : 'No'}</span>
+      </div>
+      ${it.detalles ? `<p class="sol-note">${esc(it.detalles)}</p>` : ''}
+      ${form}
+    </div>`;
+  }).join('') || '<div class="empty"><strong>Sin vehículos registrados</strong></div>';
+
+  $('#drawerBody').innerHTML = `
+    <section class="sol-block">
+      <h3>${ic('building')}Datos de la empresa</h3>
+      <div class="sol-grid">
+        <div><small>RUC</small><strong>${esc(s.ruc)}</strong></div>
+        <div><small>Contacto</small><strong>${esc(s.contacto)}${s.cargo ? ' · ' + esc(s.cargo) : ''}</strong></div>
+        <div><small>Teléfono</small><strong>${esc(s.telefono)}</strong></div>
+        <div><small>Correo</small><strong>${esc(s.correo)}</strong></div>
+        <div class="wide"><small>Dirección</small><strong>${esc(s.direccion || '—')}</strong></div>
+        <div><small>Actividad</small><strong>${esc(s.actividad || '—')}</strong></div>
+        <div><small>Unidad solicitada</small><strong>${esc(s.unidad_solicitada || '—')}</strong></div>
+        <div><small>Origen</small><strong>${esc(s.origen || 'web')}</strong></div>
+      </div>
+    </section>
+    <section class="sol-block">
+      <h3>${ic('clipboard')}Requisitos y alcance</h3>
+      <p class="sol-text">${esc(s.requisitos || '—')}</p>
+      ${s.observaciones ? `<p class="sol-text muted"><b>Observaciones:</b> ${esc(s.observaciones)}</p>` : ''}
+      ${s.respuesta_admin ? `<p class="sol-text"><b>Respuesta del administrador:</b> ${esc(s.respuesta_admin)}</p>` : ''}
+    </section>
+    <section class="sol-block">
+      <h3>${ic('truck')}Vehículos solicitados (${items.length})</h3>
+      ${itemHtml}
+    </section>
+    ${editable ? `<section class="sol-block">
+      <h3>${ic('check')}Aprobación y asignación</h3>
+      <div class="field"><label>Unidad minera del cliente</label><input class="input" id="solUnidad" maxlength="150" value="${esc(s.unidad_solicitada || s.razon_social)}"></div>
+      <div class="field"><label>Observación para la empresa</label><textarea class="input" id="solObs" rows="3" maxlength="1000" placeholder="Condiciones de la asignación, disponibilidad o motivo del rechazo.">${esc(s.respuesta_admin || '')}</textarea></div>
+      <p class="muted" style="font-size:11.5px">Al aprobar se crea la empresa por RUC, su unidad minera, se reasignan los vehículos y se registra la asignación en la base de datos.</p>
+    </section>` : ''}`;
+
+  if (editable) {
+    // Preseleccionar el vehículo/conductor ya guardado, si existe.
+    $$('#drawerBody .sol-item').forEach(card => {
+      const item = items.find(x => String(x.id) === card.dataset.item);
+      if (!item) return;
+      const v = card.querySelector('.sol-veh'), c = card.querySelector('.sol-cond');
+      if (v && item.vehiculo_id) v.value = String(item.vehiculo_id);
+      if (c && item.conductor_id) c.value = String(item.conductor_id);
+    });
+    $('#drawerFoot').innerHTML = `<button class="btn ghost" id="solReject">${ic('x')}Rechazar</button><div class="spacer"></div><button class="btn primary" id="solApprove">${ic('check')}Aprobar y asignar</button>`;
+    $('#solApprove').onclick = () => approveSolicitud(s, items);
+    $('#solReject').onclick = () => rejectSolicitud(s);
+  } else {
+    $('#drawerFoot').innerHTML = `<div class="spacer"></div><button class="btn ghost" id="solClose">Cerrar</button>`;
+    $('#solClose').onclick = () => closeDrawer();
+  }
+}
+async function approveSolicitud(s, items) {
+  const pedidos = $$('#drawerBody .sol-item').map(card => {
+    const v = card.querySelector('.sol-veh');
+    const c = card.querySelector('.sol-cond');
+    return { itemId: +card.dataset.item, vehiculoId: v && v.value ? +v.value : null, conductorId: c && c.value ? +c.value : null };
+  }).filter(x => x.vehiculoId);
+  const vistos = new Set();
+  for (const x of pedidos) {
+    if (vistos.has(x.vehiculoId)) { toast('Un mismo vehículo no puede asignarse a dos pedidos.', true); return; }
+    vistos.add(x.vehiculoId);
+  }
+  const unidadNombre = ($('#solUnidad')?.value || '').trim();
+  const observacion = ($('#solObs')?.value || '').trim();
+  if (!pedidos.length) {
+    if (!(await askConfirm('Aprobar sin vehículos', 'No seleccionó vehículos. La empresa quedará registrada y los pedidos sin asignar. ¿Desea continuar?', 'Sí, aprobar'))) return;
+  }
+  const btn = $('#solApprove');
+  btn.disabled = true;
+  btn.textContent = 'Aprobando…';
+  try {
+    const r = await api(`/api/solicitudes/${s.id}/aprobar`, {
+      method: 'POST',
+      body: { observacion, unidadNombre, items: pedidos },
+      timeout: 60000
+    });
+    closeDrawer(true);
+    toast(`Solicitud ${r.codigo || s.codigo} aprobada. ${r.asignados || 0} vehículo(s) asignado(s).`);
+    await refreshMetaPendientes();
+    loadSolicitudes();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `${ic('check')}Aprobar y asignar`;
+  }
+}
+async function rejectSolicitud(s) {
+  const motivo = ($('#solObs')?.value || '').trim();
+  if (motivo.length < 5) { toast('Escriba el motivo del rechazo en Observaciones.', true); return; }
+  if (!(await askConfirm('Rechazar solicitud', `Se rechazará la solicitud de «${s.razon_social}» y se guardará el motivo para la empresa.`, 'Sí, rechazar'))) return;
+  const btn = $('#solReject');
+  btn.disabled = true;
+  try {
+    await api(`/api/solicitudes/${s.id}/rechazar`, { method: 'POST', body: { observacion: motivo } });
+    closeDrawer(true);
+    toast('Solicitud rechazada.');
+    await refreshMetaPendientes();
+    loadSolicitudes();
+  } catch (e) {
+    toast(e.message, true);
+    btn.disabled = false;
+  }
+}
+
 /* ---------- Arranque ---------- */
 $('#empresa').onchange = () => { $('#loginError').textContent = ''; fillRoles(); };
 $('#reloadCtx').onclick = async e => {
@@ -1124,4 +1475,17 @@ $('#togglePw').onclick = () => {
   $('#togglePw').innerHTML = ic(show ? 'eyeoff' : 'eye');
 };
 $('#confirmDlg').addEventListener('close', () => { $('#confirmOk').onclick = null; $('#confirmCancel').onclick = null; });
+$('#openRegistro').onclick = openRegistro;
+$('#closeRegistro').innerHTML = ic('x');
+$('#closeRegistro').onclick = closeRegistro;
+$('#closeRegistro2').onclick = closeRegistro;
+$('#regCancel').onclick = closeRegistro;
+$('#regAddRow').onclick = addRegRow;
+$('#regForm').onsubmit = submitRegistro;
+$('#regAgain').onclick = () => {
+  $('#regSuccess').classList.add('hidden');
+  $('#regForm').classList.remove('hidden');
+  if (!regState.rows) addRegRow();
+  $('#regRuc').focus();
+};
 boot();

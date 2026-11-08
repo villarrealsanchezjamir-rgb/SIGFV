@@ -79,7 +79,7 @@ if (r.status !== 0) {
 const apk = path.join(__dirname, '..', 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
 const { version } = require('../package.json');
 const dist = path.join(__dirname, '..', 'dist');
-const finalApk = path.join(dist, `SIGFV-${version}.apk`);
+const finalApk = path.join(dist, `SIGFV-${version}-release.apk`);
 
 if (!fs.existsSync(apk)) {
   console.error('No se encontró la APK en:', apk);

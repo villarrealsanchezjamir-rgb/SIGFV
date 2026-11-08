@@ -25,6 +25,7 @@ public static class ModuleDirectory
         "mantenimientos", "inspecciones",
         "abastecimientos", "documentos",
         "incidentes",
+        "solicitudes",
         "usuarios", "roles", "empresas", "unidades_mineras",
         "marcas", "modelos", "propietarios", "proveedores_combustible", "talleres"
     };
@@ -35,6 +36,7 @@ public static class ModuleDirectory
         "mantenimientos" or "inspecciones" => "mantenimiento",
         "abastecimientos" or "documentos" => "logistica",
         "incidentes" => "seguridad",
+        "solicitudes" => "administracion",
         _ => "administracion"
     };
 

@@ -1,7 +1,7 @@
 'use strict';
 /* SIGFV · app móvil (Capacitor). La URL del backend va grabada en config.js. */
 const API = String(window.SIGFV_API_BASE || 'https://sigfv.onrender.com').replace(/\/+$/, '');
-const APP_VERSION = window.SIGFV_APP_VERSION || '2.3.0';
+const APP_VERSION = window.SIGFV_APP_VERSION || '2.4.0';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -66,6 +66,7 @@ const GROUP_MAP = {
   mantenimientos: 'mantenimiento', inspecciones: 'mantenimiento',
   abastecimientos: 'logistica', documentos: 'logistica',
   incidentes: 'seguridad',
+  solicitudes: 'administracion',
   usuarios: 'administracion', empresas: 'administracion', unidades_mineras: 'administracion',
   marcas: 'administracion', modelos: 'administracion', propietarios: 'administracion',
   proveedores_combustible: 'administracion', talleres: 'administracion'
@@ -82,6 +83,7 @@ const MODULE_ORDER = [
   'mantenimientos', 'inspecciones',
   'abastecimientos', 'documentos',
   'incidentes',
+  'solicitudes',
   'usuarios', 'empresas', 'unidades_mineras',
   'marcas', 'modelos', 'propietarios', 'proveedores_combustible', 'talleres'
 ];
@@ -259,7 +261,7 @@ function groups() {
   const out = GROUP_DEFS.map(g => ({ ...g, owner: GROUP_OWNERS[g.id] || 'Administrador', items: [] }));
   const by = Object.fromEntries(out.map(g => [g.id, g]));
   for (const [key, r] of Object.entries(state.meta.resources)) {
-    if (r.custom) continue;
+    if (r.custom && key !== 'solicitudes') continue;
     const gid = GROUP_MAP[key] || (r.mod === 'configuracion' ? 'administracion' : 'operaciones');
     (by[gid] || by.operaciones).items.push({ key, ...r });
   }
@@ -568,7 +570,10 @@ function renderModules() {
       const isAdmin = g.id === 'administracion';
       const users = isAdmin ? g.items.filter(r => r.mod === 'usuarios') : [];
       const cats = isAdmin ? g.items.filter(r => r.mod !== 'usuarios') : g.items;
-      const row = r => `<button class="mod-item" data-key="${r.key}"><span class="mi">${ic(r.icon || 'package')}</span><span class="mt"><strong>${esc(r.label)}</strong><small>${r.crear ? 'Consultar y registrar' : 'Solo consulta'} · ${esc(r.responsable || g.owner)}</small></span>${ic('chevron', 'sm chev')}</button>`;
+      const row = r => {
+        const hint = r.key === 'solicitudes' ? 'Revisar, aprobar y asignar' : (r.crear ? 'Consultar y registrar' : 'Solo consulta');
+        return `<button class="mod-item" data-key="${r.key}"><span class="mi">${ic(r.icon || 'package')}</span><span class="mt"><strong>${esc(r.label)}</strong><small>${hint} · ${esc(r.responsable || g.owner)}</small></span>${ic('chevron', 'sm chev')}</button>`;
+      };
       return `<section class="mod-group" data-g="${g.id}">
         <div class="mod-head"><span class="m-icon">${ic(g.icon)}</span><div><h2>${esc(g.title)}</h2><p>${esc(g.desc)}</p></div><span class="owner-pill" title="Responsable del área">${esc(g.owner)}</span></div>
         ${users.length ? `<div class="subhead">Usuarios</div><div class="mod-card" style="margin-bottom:9px">${users.map(row).join('')}</div>` : ''}
@@ -610,6 +615,12 @@ function closeSub(force = false) {
   if (wasPushed) { sub.suppress = true; try { history.back(); } catch { sub.suppress = false; } }
 }
 function subBack() {
+  if (sub.view === 'solicitud') {
+    sub.view = 'solicitudes'; sub.id = null;
+    renderSolicitudesScreen();
+    return;
+  }
+  if (sub.view === 'solicitudes') { closeSub(); return; }
   if (sub.view === 'form' && sub.backToList) {
     if (sub.dirty && !confirm('Hay cambios sin guardar. ¿Desea descartarlos?')) return;
     sub.dirty = false;
@@ -628,6 +639,7 @@ window.addEventListener('popstate', () => {
    cerrarla. En el navegador se mantiene el historial normal. */
 let lastBackAt = 0;
 function hardwareBack() {
+  if ($('#registro') && !$('#registro').classList.contains('hidden')) { closeRegistro(); return true; }
   if ($('#sub') && $('#sub').classList.contains('open')) { subBack(); return true; }
   if (state.tab !== 'home') { renderTab('home'); return true; }
   const now = Date.now();
@@ -646,6 +658,7 @@ async function initBackButton() {
 }
 
 function openList(key) {
+  if (key === 'solicitudes') { openSolicitudes(); return; }
   const r = state.meta.resources[key];
   if (!r) return;
   sub.view = 'list'; sub.key = key; sub.id = null; sub.q = ''; sub.page = 1;
@@ -1098,6 +1111,307 @@ function exportAll() {
 }
 
 /* ---------- Alertas ---------- */
+/* ---------- Registro público de empresas (2.4) ---------- */
+let mregCtx = null;
+const mregState = { rows: 0 };
+function mregVal(id) { const el = $(id); return el ? el.value.trim() : ''; }
+async function openRegistro() {
+  $('#registro').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  $('#mregError').textContent = '';
+  $('#mregSuccess').classList.add('hidden');
+  $('#mregForm').classList.remove('hidden');
+  if (!mregCtx) {
+    try {
+      mregCtx = await api('/public/registro/opciones', { timeout: 30000 });
+      if (!mregCtx || !mregCtx.tipos) mregCtx = { tipos: [], categorias: [], requisitos: [] };
+    } catch (e) {
+      mregCtx = { tipos: [], categorias: [], requisitos: [] };
+      $('#mregError').textContent = navigator.onLine === false
+        ? 'Sin conexión. Conéctese a internet para enviar su solicitud de registro.'
+        : e.message;
+    }
+  }
+  $('#mregRequisitos').innerHTML = (mregCtx.requisitos || []).map(r => `<li>${ic('check')}<span>${esc(r)}</span></li>`).join('');
+  if (!mregState.rows) mregAddRow();
+}
+function closeRegistro() {
+  $('#registro').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+function mregRenumber() {
+  $$('#mregRows .mreg-veh').forEach((el, i) => {
+    const t = el.querySelector('.mreg-veh-head strong');
+    if (t) t.textContent = 'Vehículo ' + (i + 1);
+  });
+}
+function mregAddRow() {
+  if (mregState.rows >= 10) { toast('Puede agregar hasta 10 pedidos de vehículos.', true); return; }
+  mregState.rows++;
+  const tipos = (mregCtx?.tipos || []).map(t => `<option value="${t.id}">${esc(t.nombre)}</option>`).join('');
+  const cats = (mregCtx?.categorias || []).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  const wrap = document.createElement('div');
+  wrap.className = 'mreg-veh';
+  wrap.innerHTML = `
+    <div class="mreg-veh-head"><strong>Vehículo ${mregState.rows}</strong><button type="button" data-del-row aria-label="Quitar">${ic('trash', 'sm')}</button></div>
+    <div class="mreg-grid">
+      <div class="field"><label>Tipo <span class="req">*</span></label><select class="input" data-f="tipo"><option value="">Seleccione…</option>${tipos}</select></div>
+      <div class="field"><label>Categoría</label><select class="input" data-f="categoria"><option value="">Cualquiera</option>${cats}</select></div>
+      <div class="field"><label>Cantidad</label><input class="input" data-f="cantidad" type="number" min="1" max="50" value="1"></div>
+      <div class="field"><label>Desde</label><input class="input" data-f="inicio" type="date"></div>
+      <div class="field"><label>Hasta</label><input class="input" data-f="fin" type="date"></div>
+      <label class="mreg-check"><input type="checkbox" data-f="conductor"> Requiere conductor</label>
+      <div class="field wide"><label>Detalles</label><input class="input" data-f="detalles" maxlength="500" placeholder="Ruta, turno o condiciones especiales"></div>
+    </div>`;
+  $('#mregRows').appendChild(wrap);
+  wrap.querySelector('[data-del-row]').onclick = () => {
+    if ($$('#mregRows .mreg-veh').length === 1) { toast('Debe registrar al menos un vehículo.', true); return; }
+    wrap.remove();
+    mregRenumber();
+  };
+}
+function mregVehiculos() {
+  return $$('#mregRows .mreg-veh').map(el => {
+    const val = f => el.querySelector(`[data-f="${f}"]`);
+    return {
+      tipoVehiculoId: Number(val('tipo').value || 0) || null,
+      categoriaVehiculoId: Number(val('categoria').value || 0) || null,
+      cantidad: Number(val('cantidad').value || 1),
+      fechaInicio: val('inicio').value || null,
+      fechaFin: val('fin').value || null,
+      requiereConductor: !!(val('conductor') && val('conductor').checked),
+      detalles: val('detalles').value.trim() || null
+    };
+  });
+}
+async function mregSubmit(e) {
+  e.preventDefault();
+  const err = $('#mregError');
+  err.textContent = '';
+  const body = {
+    ruc: mregVal('#mregRuc').replace(/\D/g, ''),
+    razonSocial: mregVal('#mregRazon'),
+    contacto: mregVal('#mregContacto'),
+    cargo: mregVal('#mregCargo'),
+    telefono: mregVal('#mregTelefono'),
+    correo: mregVal('#mregCorreo'),
+    direccion: mregVal('#mregDireccion'),
+    actividad: mregVal('#mregActividad'),
+    unidadSolicitada: mregVal('#mregUnidad'),
+    requisitos: mregVal('#mregRequisitosTexto'),
+    observaciones: mregVal('#mregObservaciones'),
+    website: mregVal('#mregWebsite'),
+    origen: 'apk',
+    vehiculos: mregVehiculos()
+  };
+  if (body.ruc.length !== 11) { err.textContent = 'Ingrese un RUC válido de 11 dígitos.'; return; }
+  if (body.razonSocial.length < 3) { err.textContent = 'Ingrese la razón social.'; return; }
+  if (body.contacto.length < 3) { err.textContent = 'Ingrese la persona de contacto.'; return; }
+  if (body.telefono.replace(/\D/g, '').length < 6) { err.textContent = 'Ingrese un teléfono válido.'; return; }
+  if (!/^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$/.test(body.correo)) { err.textContent = 'Ingrese un correo válido.'; return; }
+  if (body.requisitos.length < 10) { err.textContent = 'Describa los requisitos del servicio.'; return; }
+  const sinTipo = body.vehiculos.findIndex(v => !v.tipoVehiculoId);
+  if (sinTipo >= 0) { err.textContent = `Seleccione el tipo de vehículo en el pedido ${sinTipo + 1}.`; return; }
+  const btn = $('#mregSubmit');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const r = await api('/public/solicitudes', { method: 'POST', body, timeout: 45000 });
+    $('#mregForm').classList.add('hidden');
+    $('#mregSuccess').classList.remove('hidden');
+    $('#mregCode').textContent = r.codigo || ('#' + r.id);
+    $('#mregForm').reset();
+    $('#mregRows').innerHTML = '';
+    mregState.rows = 0;
+  } catch (x) {
+    err.textContent = x.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enviar solicitud';
+  }
+}
+
+/* ---------- Bandeja de solicitudes (2.4) ---------- */
+const mSol = { estado: 'pendiente', q: '' };
+function openSolicitudes() {
+  if (!state.meta.resources.solicitudes) { toast('No tiene permiso para revisar solicitudes.', true); return; }
+  sub.view = 'solicitudes'; sub.key = 'solicitudes'; sub.id = null; sub.q = ''; sub.page = 1; sub.dirty = false;
+  mSol.estado = 'pendiente'; mSol.q = '';
+  showSub();
+  renderSolicitudesScreen();
+}
+function renderSolicitudesScreen() {
+  subBar('Solicitudes de empresas');
+  $('#subFoot').innerHTML = '';
+  const chips = [['pendiente', 'Pendientes'], ['aprobada', 'Aprobadas'], ['rechazada', 'Rechazadas'], ['', 'Todas']];
+  $('#subBody').innerHTML = `
+    <div class="chips" id="mSolChips">${chips.map(([e, l]) => `<button class="chip ${mSol.estado === e ? 'on' : ''}" data-e="${e}">${l}</button>`).join('')}</div>
+    <div class="search-wrap">${ic('search')}<input id="mSolQ" value="${esc(mSol.q)}" placeholder="Buscar RUC, empresa o código…" autocomplete="off"></div>
+    <div class="list-head"><span class="count" id="mSolCount"></span></div>
+    <div id="mSolList"></div>`;
+  $$('#mSolChips [data-e]').forEach(b => b.onclick = () => {
+    mSol.estado = b.dataset.e;
+    $$('#mSolChips .chip').forEach(x => x.classList.toggle('on', x === b));
+    loadSolicitudesScreen();
+  });
+  const q = $('#mSolQ');
+  q.oninput = e => {
+    mSol.q = e.target.value.trim();
+    clearTimeout(renderSolicitudesScreen._t);
+    renderSolicitudesScreen._t = setTimeout(loadSolicitudesScreen, 320);
+  };
+  loadSolicitudesScreen();
+}
+async function loadSolicitudesScreen() {
+  const list = $('#mSolList');
+  if (!list) return;
+  list.innerHTML = Array.from({ length: 4 }, () => '<div class="skel" style="height:78px;margin-bottom:9px"></div>').join('');
+  try {
+    const rows = await api(`/solicitudes?estado=${encodeURIComponent(mSol.estado)}&q=${encodeURIComponent(mSol.q)}`);
+    const count = $('#mSolCount');
+    if (count) count.textContent = `${rows.length} solicitud${rows.length === 1 ? '' : 'es'}`;
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty"><span class="big">${ic('building')}</span><strong>No hay solicitudes</strong><span>Las empresas pueden registrarse desde la pantalla de acceso de la web o de la APK.</span></div>`;
+      return;
+    }
+    list.innerHTML = rows.map(s => `<button class="record" data-sol="${s.id}">
+      <span class="rec-main">
+        <span class="rec-title"><strong>${esc(s.razon_social)}</strong>${badge(s.estado)}</span>
+        <span class="rec-sub">${esc(s.codigo)} · RUC ${esc(s.ruc)}</span>
+        <span class="rec-meta"><span><b>Contacto:</b> ${esc(s.contacto)}</span><span><b>Vehículos:</b> ${s.unidades ?? 0}</span><span><b>Asignados:</b> ${s.asignados ?? 0}</span></span>
+      </span>${ic('chevron', 'sm chev')}</button>`).join('');
+    $$('#mSolList .record').forEach(b => b.onclick = () => openSolicitudDetail(+b.dataset.sol));
+  } catch (e) {
+    list.innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudieron cargar</strong><span>${esc(e.message)}</span><button class="btn ghost sm" id="mSolRetry">Reintentar</button></div>`;
+    const b = $('#mSolRetry'); if (b) b.onclick = loadSolicitudesScreen;
+  }
+}
+async function openSolicitudDetail(id) {
+  sub.view = 'solicitud'; sub.id = id;
+  subBar('Solicitud de empresa');
+  $('#subFoot').innerHTML = '';
+  $('#subBody').innerHTML = Array.from({ length: 4 }, () => '<div class="skel" style="height:90px;margin-bottom:10px"></div>').join('');
+  try {
+    const [s, asig] = await Promise.all([
+      api('/solicitudes/' + id),
+      api('/solicitudes/asignables').catch(() => ({ vehiculos: [], conductores: [] }))
+    ]);
+    renderSolicitudDetail(s, asig || { vehiculos: [], conductores: [] });
+  } catch (e) {
+    $('#subBody').innerHTML = `<div class="empty"><span class="big">${ic('alert')}</span><strong>No se pudo abrir</strong><span>${esc(e.message)}</span></div>`;
+  }
+}
+function renderSolicitudDetail(s, asig) {
+  const pendiente = String(s.estado) === 'pendiente';
+  const editable = pendiente && !!(state.meta.resources.solicitudes && state.meta.resources.solicitudes.editar);
+  const items = s.items || [];
+  const vehOpts = (asig.vehiculos || []).map(v => `<option value="${v.id}">${esc(v.codigo_interno)}${v.placa ? ' · ' + esc(v.placa) : ''}${v.estado ? ' · ' + esc(v.estado) : ''}</option>`).join('');
+  const condOpts = (asig.conductores || []).map(c => `<option value="${c.id}">${esc(c.apellidos + ', ' + c.nombres)}${c.licencia_vence ? ' · lic. ' + esc(c.licencia_vence) : ' · sin licencia'}</option>`).join('');
+  const itemHtml = items.map(it => {
+    const asignado = it.vehiculo_id
+      ? `<div class="sol-assigned">${ic('truck', 'sm')}<span>${esc(it.vehiculo_codigo || 'Vehículo')}${it.vehiculo_placa ? ' · ' + esc(it.vehiculo_placa) : ''}${it.conductor ? ' · ' + esc(it.conductor) : ''}</span></div>`
+      : (pendiente ? '' : '<div class="sol-assigned muted">Sin vehículo asignado</div>');
+    const form = editable ? `<div class="msol-assign">
+      <div class="field"><label>Vehículo</label><select class="input msol-veh"><option value="">— Sin asignar —</option>${vehOpts}</select></div>
+      <div class="field"><label>Conductor</label><select class="input msol-cond"><option value="">— Sin conductor —</option>${condOpts}</select></div>
+    </div>` : asignado;
+    return `<div class="msol-item" data-item="${it.id}">
+      <div class="msol-item-head"><strong>${esc(it.tipo || 'Vehículo')}${it.categoria ? ' · ' + esc(it.categoria) : ''}</strong>${badge(it.estado)}</div>
+      <div class="msol-meta"><span><b>Cantidad:</b> ${it.cantidad ?? 1}</span><span><b>Desde:</b> ${fmt(it.fecha_inicio)}</span><span><b>Hasta:</b> ${fmt(it.fecha_fin)}</span><span><b>Conductor:</b> ${it.requiere_conductor ? 'Sí' : 'No'}</span></div>
+      ${it.detalles ? `<p class="msol-note">${esc(it.detalles)}</p>` : ''}
+      ${form}
+    </div>`;
+  }).join('') || '<div class="empty"><strong>Sin vehículos registrados</strong></div>';
+
+  $('#subBody').innerHTML = `
+    <div class="card pad sol-card">
+      <div class="sol-title"><strong>${esc(s.razon_social)}</strong>${badge(s.estado)}</div>
+      <div class="sol-kv"><span>RUC</span><b>${esc(s.ruc)}</b></div>
+      <div class="sol-kv"><span>Código</span><b>${esc(s.codigo)}</b></div>
+      <div class="sol-kv"><span>Contacto</span><b>${esc(s.contacto)}${s.cargo ? ' · ' + esc(s.cargo) : ''}</b></div>
+      <div class="sol-kv"><span>Teléfono</span><b>${esc(s.telefono)}</b></div>
+      <div class="sol-kv"><span>Correo</span><b>${esc(s.correo)}</b></div>
+      <div class="sol-kv"><span>Dirección</span><b>${esc(s.direccion || '—')}</b></div>
+      <div class="sol-kv"><span>Unidad solicitada</span><b>${esc(s.unidad_solicitada || '—')}</b></div>
+    </div>
+    <div class="subhead" style="margin-top:16px">Requisitos y alcance</div>
+    <div class="card pad sol-text">${esc(s.requisitos || '—')}${s.observaciones ? `<br><br><b>Observaciones:</b> ${esc(s.observaciones)}` : ''}${s.respuesta_admin ? `<br><br><b>Respuesta del administrador:</b> ${esc(s.respuesta_admin)}` : ''}</div>
+    <div class="subhead" style="margin-top:16px">Vehículos solicitados (${items.length})</div>
+    ${itemHtml}
+    ${editable ? `<div class="card pad" style="margin-top:14px">
+      <div class="field"><label>Unidad minera del cliente</label><input class="input" id="msolUnidad" maxlength="150" value="${esc(s.unidad_solicitada || s.razon_social)}"></div>
+      <div class="field" style="margin-bottom:0"><label>Observación o motivo del rechazo</label><textarea class="input" id="msolObs" rows="3" maxlength="1000" placeholder="Condiciones de la asignación o motivo del rechazo">${esc(s.respuesta_admin || '')}</textarea></div>
+    </div>` : ''}`;
+
+  if (editable) {
+    $$('#subBody .msol-item').forEach(card => {
+      const item = items.find(x => String(x.id) === card.dataset.item);
+      if (!item) return;
+      const v = card.querySelector('.msol-veh'), c = card.querySelector('.msol-cond');
+      if (v && item.vehiculo_id) v.value = String(item.vehiculo_id);
+      if (c && item.conductor_id) c.value = String(item.conductor_id);
+    });
+    $('#subFoot').innerHTML = `<div class="subfoot-in"><button class="btn danger" id="msolReject">Rechazar</button><button class="btn primary" id="msolApprove">Aprobar y asignar</button></div>`;
+    $('#msolApprove').onclick = () => approveSolicitud(s);
+    $('#msolReject').onclick = () => rejectSolicitud(s);
+  } else {
+    $('#subFoot').innerHTML = `<div class="subfoot-in"><button class="btn ghost" id="msolClose">Cerrar</button></div>`;
+    $('#msolClose').onclick = () => closeSub(true);
+  }
+}
+async function refreshMetaOnly() {
+  try {
+    state.meta = await apiRetry('/meta');
+    await idbPut('cache', 'meta', state.meta);
+    renderTabs();
+    renderAppbar();
+  } catch { }
+}
+async function approveSolicitud(s) {
+  const pedidos = $$('#subBody .msol-item').map(card => {
+    const v = card.querySelector('.msol-veh');
+    const c = card.querySelector('.msol-cond');
+    return { itemId: +card.dataset.item, vehiculoId: v && v.value ? +v.value : null, conductorId: c && c.value ? +c.value : null };
+  }).filter(x => x.vehiculoId);
+  const vistos = new Set();
+  for (const x of pedidos) {
+    if (vistos.has(x.vehiculoId)) { toast('Un vehículo no puede asignarse dos veces.', true); return; }
+    vistos.add(x.vehiculoId);
+  }
+  if (!pedidos.length && !confirm('No seleccionó vehículos. ¿Aprobar la empresa y dejar los pedidos sin asignar?')) return;
+  const btn = $('#msolApprove');
+  btn.disabled = true; btn.textContent = 'Aprobando…';
+  try {
+    const r = await api(`/solicitudes/${s.id}/aprobar`, {
+      method: 'POST',
+      body: { observacion: ($('#msolObs')?.value || '').trim(), unidadNombre: ($('#msolUnidad')?.value || '').trim(), items: pedidos },
+      timeout: 60000
+    });
+    closeSub(true);
+    toast(`Solicitud aprobada. ${r.asignados || 0} vehículo(s) asignado(s).`);
+    await refreshMetaOnly();
+    renderTab('modules');
+  } catch (e) {
+    toast(e.message, true);
+    btn.disabled = false; btn.textContent = 'Aprobar y asignar';
+  }
+}
+async function rejectSolicitud(s) {
+  const motivo = ($('#msolObs')?.value || '').trim();
+  if (motivo.length < 5) { toast('Escriba el motivo del rechazo en Observaciones.', true); return; }
+  if (!confirm(`¿Rechazar la solicitud de «${s.razon_social}»?`)) return;
+  const btn = $('#msolReject');
+  btn.disabled = true;
+  try {
+    await api(`/solicitudes/${s.id}/rechazar`, { method: 'POST', body: { observacion: motivo } });
+    closeSub(true);
+    toast('Solicitud rechazada.');
+    await refreshMetaOnly();
+    renderTab('modules');
+  } catch (e) {
+    toast(e.message, true);
+    btn.disabled = false;
+  }
+}
+
 const ALERT_FILTERS = [
   ['todas', 'Todas'], ['documentos', 'Documentos'], ['licencias', 'Licencias'],
   ['inspecciones', 'Inspecciones'], ['incidentes', 'Incidentes'], ['vehiculos', 'Vehículos']
@@ -1307,6 +1621,19 @@ $('#togglePw').onclick = () => {
   $('#togglePw').innerHTML = ic(show ? 'eyeoff' : 'eye');
 };
 $('#bootRetry').onclick = () => start();
+$('#openRegistro').onclick = openRegistro;
+$('#mregClose').innerHTML = ic('x');
+$('#mregClose').onclick = closeRegistro;
+$('#mregClose2').onclick = closeRegistro;
+$('#mregCancel').onclick = closeRegistro;
+$('#mregAddRow').onclick = mregAddRow;
+$('#mregForm').onsubmit = mregSubmit;
+$('#mregAgain').onclick = () => {
+  $('#mregSuccess').classList.add('hidden');
+  $('#mregForm').classList.remove('hidden');
+  if (!mregState.rows) mregAddRow();
+  $('#mregRuc').focus();
+};
 
 // Mantiene el backend despierto mientras la app permanece abierta.
 setInterval(() => { if (state.token && !document.hidden) ping(); }, 4 * 60 * 1000);

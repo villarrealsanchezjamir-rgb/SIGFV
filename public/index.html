@@ -61,9 +61,73 @@
 
         <div class="error" id="loginError" role="alert"></div>
         <button class="btn primary full" id="loginBtn" type="submit">Ingresar</button>
-        <p class="login-hint">SIGFV v2.3 · <a href="#" id="reloadCtx" style="color:inherit">Actualizar empresas y roles</a></p>
+        <p class="login-hint">SIGFV v2.4 · <a href="#" id="reloadCtx" style="color:inherit">Actualizar empresas y roles</a></p>
+        <div class="login-register">
+          <span>¿Su empresa aún no tiene acceso?</span>
+          <button type="button" id="openRegistro">Solicitar registro y vehículos</button>
+        </div>
       </form>
     </section>
+  </div>
+
+  <!-- ============ Registro público de empresas ============ -->
+  <div id="registro" class="hidden" role="dialog" aria-modal="true" aria-labelledby="regTitle">
+    <div class="reg-shell">
+      <header class="reg-head">
+        <div>
+          <small>Registro de empresas · SIGFV</small>
+          <h2 id="regTitle">Solicite su registro y los vehículos que necesita</h2>
+          <p>Complete los datos de su empresa y el detalle de la flota requerida. El administrador revisará la solicitud y asignará los vehículos disponibles.</p>
+        </div>
+        <button class="icon-btn" id="closeRegistro" type="button" title="Cerrar" aria-label="Cerrar"></button>
+      </header>
+      <div class="reg-body">
+        <aside class="reg-side">
+          <h3>Requisitos para registrar su empresa</h3>
+          <ul id="regRequisitos"></ul>
+          <div class="reg-side-note">
+            <strong>¿Qué ocurre después?</strong>
+            <p>La solicitud queda guardada en la base de datos. El administrador valida el RUC, crea la empresa y su unidad minera, y asigna los vehículos y conductores pedidos.</p>
+          </div>
+        </aside>
+        <div class="reg-main">
+          <form id="regForm" autocomplete="on">
+            <div class="reg-section">Datos de la empresa</div>
+            <div class="reg-grid">
+              <div class="field"><label for="regRuc">RUC <span class="req">*</span></label><input class="input" id="regRuc" inputmode="numeric" maxlength="11" placeholder="11 dígitos" required></div>
+              <div class="field"><label for="regRazon">Razón social <span class="req">*</span></label><input class="input" id="regRazon" maxlength="150" placeholder="Nombre legal de la empresa" required></div>
+              <div class="field"><label for="regContacto">Persona de contacto <span class="req">*</span></label><input class="input" id="regContacto" maxlength="120" placeholder="Nombre y apellidos" required></div>
+              <div class="field"><label for="regCargo">Cargo</label><input class="input" id="regCargo" maxlength="80" placeholder="Ej. Jefe de logística"></div>
+              <div class="field"><label for="regTelefono">Teléfono <span class="req">*</span></label><input class="input" id="regTelefono" maxlength="30" placeholder="Ej. 999 888 777" required></div>
+              <div class="field"><label for="regCorreo">Correo electrónico <span class="req">*</span></label><input class="input" id="regCorreo" type="email" maxlength="120" placeholder="contacto@empresa.com" required></div>
+              <div class="field wide"><label for="regDireccion">Dirección</label><input class="input" id="regDireccion" maxlength="200" placeholder="Dirección fiscal o de operaciones"></div>
+              <div class="field"><label for="regActividad">Actividad / rubro</label><input class="input" id="regActividad" maxlength="150" placeholder="Ej. Minería, construcción"></div>
+              <div class="field"><label for="regUnidad">Unidad minera o sede</label><input class="input" id="regUnidad" maxlength="150" placeholder="Lugar donde se requiere la flota"></div>
+            </div>
+            <div class="reg-section">Vehículos y servicio solicitado</div>
+            <div id="regRows"></div>
+            <button class="btn ghost sm" type="button" id="regAddRow">+ Agregar otro vehículo</button>
+            <div class="field" style="margin-top:14px"><label for="regRequisitosTexto">Requisitos, alcance y condiciones del servicio <span class="req">*</span></label><textarea class="input" id="regRequisitosTexto" rows="4" maxlength="2000" placeholder="Describa turnos, rutas, tiempos, requisitos del conductor, condiciones de seguridad, etc." required></textarea></div>
+            <div class="field"><label for="regObservaciones">Observaciones adicionales</label><textarea class="input" id="regObservaciones" rows="2" maxlength="1000" placeholder="Información complementaria para el administrador"></textarea></div>
+            <input type="text" id="regWebsite" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+            <div class="error" id="regError" role="alert"></div>
+            <div class="reg-actions">
+              <button class="btn ghost" type="button" id="regCancel">Cancelar</button>
+              <button class="btn primary" type="submit" id="regSubmit">Enviar solicitud</button>
+            </div>
+          </form>
+          <div id="regSuccess" class="reg-success hidden">
+            <div class="reg-success-ico">✓</div>
+            <h3>Solicitud enviada correctamente</h3>
+            <p>Su código de seguimiento es <strong id="regCode">—</strong>. El administrador revisará la información y se comunicará con usted al teléfono o correo registrado.</p>
+            <div class="reg-actions">
+              <button class="btn ghost" type="button" id="regAgain">Registrar otra solicitud</button>
+              <button class="btn primary" type="button" id="closeRegistro2">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ============ Aplicación ============ -->
