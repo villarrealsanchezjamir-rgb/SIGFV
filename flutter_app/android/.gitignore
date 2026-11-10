@@ -1,0 +1,13 @@
+# Se versionan gradle-wrapper.jar, gradlew y gradlew.bat para que el
+# proyecto se pueda compilar al clonarlo sin regenerar la plantilla.
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks

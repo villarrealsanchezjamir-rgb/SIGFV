@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pantalla de arranque: fondo oscuro SIGFV para que la transición
+     hacia la pantalla de carga de Flutter no muestre un destello blanco. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/sigfv_dark" />
+</layer-list>

@@ -4,6 +4,7 @@ npm-debug.log*
 .env.*
 android
 mobile
+flutter_app
 dist
 .git
 .gitignore
